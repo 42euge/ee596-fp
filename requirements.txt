@@ -1,0 +1,24 @@
+# Core dependencies
+torch>=2.0.0
+transformers>=4.40.0
+peft>=0.10.0
+accelerate>=0.27.0
+safetensors>=0.4.0
+
+# Data processing
+datasets>=2.18.0
+pandas>=2.0.0
+
+# Utilities
+tqdm>=4.66.0
+huggingface_hub>=0.21.0
+
+# Optional: For 4-bit/8-bit quantization (CUDA only)
+# bitsandbytes>=0.42.0
+
+# Optional: For training (TPU/Colab environment)
+# google-tunix>=0.1.6
+# jax[tpu]>=0.4.0
+# flax>=0.12.0
+# optax>=0.2.0
+# grain>=0.2.0
