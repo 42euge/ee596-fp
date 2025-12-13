@@ -174,12 +174,46 @@ Key hyperparameters in `src/config.py`:
 
 ## Training (Advanced)
 
-Training requires a TPU environment (Google Colab recommended). See the original notebook `reference.ipynb` for the full training pipeline using Google's Tunix library.
+Training requires a TPU environment (Google Colab or Kaggle recommended). Use the training notebook at `demo/train_colab.ipynb` for the full training pipeline using Google's Tunix library.
 
 Key training components:
 - **GRPO**: Group Relative Policy Optimization for RL fine-tuning
 - **Rubric-as-Reward**: Uses rubric overlap and reference similarity for reward signals
 - **LoRA**: Parameter-efficient fine-tuning with low-rank adapters
+
+### Creating and Using Checkpoints
+
+The training notebook automatically saves checkpoints during training:
+
+**Checkpoint Configuration:**
+- Checkpoints are saved every 100 training steps via Orbax CheckpointManager
+- The 3 most recent checkpoints are kept (`max_to_keep=3`)
+- Set `SAVE_TO_DRIVE=True` in the notebook to persist checkpoints to Google Drive
+- Checkpoints are saved to: `{CHECKPOINT_DIR}/actor/{step}/`
+
+**To use checkpoints locally:**
+
+1. After training completes, download `checkpoint_export.zip` from Google Drive (if using `SAVE_TO_DRIVE=True`)
+2. Extract to your local `checkpoints/` directory:
+   ```bash
+   unzip checkpoint_export.zip -d checkpoints/
+   ```
+3. Run the demo with your checkpoint:
+   ```bash
+   python demo/demo.py --checkpoint ./checkpoints/actor/<step>/model_params
+   ```
+
+**Checkpoint Directory Structure:**
+```
+checkpoints/
+└── actor/
+    ├── 100/
+    │   └── model_params/
+    ├── 200/
+    │   └── model_params/
+    └── 300/
+        └── model_params/
+```
 
 ## Model Architecture
 
