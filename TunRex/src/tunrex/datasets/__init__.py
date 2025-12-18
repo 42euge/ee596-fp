@@ -7,6 +7,7 @@ from tunrex.datasets.loaders import (
     extract_hash_answer,
     load_from_huggingface,
     load_from_kaggle,
+    load_openrubrics,
 )
 
 __all__ = [
@@ -16,4 +17,5 @@ __all__ = [
     "extract_hash_answer",
     "load_from_huggingface",
     "load_from_kaggle",
+    "load_openrubrics",
 ]

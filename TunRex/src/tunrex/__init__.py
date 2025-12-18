@@ -10,6 +10,7 @@ from tunrex.datasets import (
     extract_hash_answer,
     load_from_huggingface,
     load_from_kaggle,
+    load_openrubrics,
 )
 
 # Model loading API
@@ -29,6 +30,7 @@ __all__ = [
     "extract_hash_answer",
     "load_from_huggingface",
     "load_from_kaggle",
+    "load_openrubrics",
     # Models
     "DEFAULT_MESH",
     "get_gemma_ref_model",
