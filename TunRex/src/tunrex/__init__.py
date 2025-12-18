@@ -12,12 +12,26 @@ from tunrex.datasets import (
     load_from_kaggle,
 )
 
+# Model loading API
+from tunrex.models import (
+    DEFAULT_MESH,
+    get_gemma_ref_model,
+    get_lora_model,
+    save_model_state,
+)
+
 __all__ = [
     "__version__",
+    # Datasets
     "TunRex",
     "TunRexConfig",
     "download_kaggle_dataset",
     "extract_hash_answer",
     "load_from_huggingface",
     "load_from_kaggle",
+    # Models
+    "DEFAULT_MESH",
+    "get_gemma_ref_model",
+    "get_lora_model",
+    "save_model_state",
 ]
