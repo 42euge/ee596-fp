@@ -41,18 +41,31 @@ git clone <repository-url>
 cd ee596-fp
 ```
 
-### 2. Create Virtual Environment
+### 2. Install Dependencies
+
+**Using uv (recommended):**
+```bash
+uv sync
+```
+
+To activate the virtual environment:
+```bash
+source .venv/bin/activate
+```
+
+Or run commands directly without activating:
+```bash
+uv run python demo/demo.py
+```
+
+**Using pip:**
 ```bash
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
-
-### 3. Install Dependencies
-```bash
 pip install -r requirements.txt
 ```
 
-### 4. Authenticate with HuggingFace (Required)
+### 3. Authenticate with HuggingFace (Required)
 
 Gemma is a gated model. You must accept the license and authenticate:
 
@@ -63,7 +76,7 @@ Gemma is a gated model. You must accept the license and authenticate:
 huggingface-cli login
 ```
 
-### 5. Download Pre-trained Model (Optional)
+### 4. Download Pre-trained Model (Optional)
 
 If you have fine-tuned LoRA weights, place them in the `checkpoints/` directory:
 ```
