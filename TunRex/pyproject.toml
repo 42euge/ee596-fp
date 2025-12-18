@@ -1,0 +1,43 @@
+[project]
+name = "tunrex"
+version = "0.1.0"
+description = "TunRex - A flexible TUI/CLI toolkit"
+readme = "README.md"
+authors = [
+    { name = "Eugenio Rivera Ramos", email = "eugeniorrivera@gmail.com" }
+]
+requires-python = ">=3.10"
+dependencies = [
+    "click>=8.1.0",
+    "textual>=0.89.0",
+    "pandas>=2.0.0",
+    "pyarrow>=14.0.0",
+    "jsonlines>=4.0.0",
+    # Dataset loading dependencies
+    "grain>=0.2.0",
+    "datasets>=2.14.0",
+    "kagglehub>=0.2.0",
+]
+
+[project.scripts]
+trex = "tunrex.cli:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "ruff>=0.8.0",
+]
+tfds = [
+    "tensorflow-datasets>=4.9.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.9.9,<0.10.0"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]

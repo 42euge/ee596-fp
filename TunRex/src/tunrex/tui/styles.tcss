@@ -1,0 +1,232 @@
+/* TunRex Dataset Explorer Styles */
+
+/* Global Screen styles */
+Screen {
+    background: $surface;
+}
+
+/* Browser screen layout */
+#browser-container {
+    width: 100%;
+    height: 100%;
+}
+
+#dataset-tree {
+    width: 30%;
+    height: 100%;
+    border-right: solid $primary;
+}
+
+#data-viewer {
+    width: 70%;
+    height: 100%;
+}
+
+/* Info bars */
+.info {
+    background: $surface-darken-1;
+    color: $text;
+    padding: 0 1;
+    height: auto;
+    dock: top;
+}
+
+#info-bar {
+    dock: top;
+}
+
+#pagination-bar {
+    dock: bottom;
+}
+
+/* Data viewer components */
+#data-container {
+    height: 1fr;
+}
+
+#data-table {
+    height: 100%;
+}
+
+#json-view {
+    padding: 1;
+}
+
+/* Comparison screen */
+#comparison-main {
+    width: 100%;
+    height: 100%;
+}
+
+#comparison-instructions {
+    text-align: center;
+    padding: 1 2;
+    margin: 1;
+    border: round $primary;
+}
+
+#file-selection {
+    width: 100%;
+    height: 1fr;
+}
+
+.selection-side {
+    width: 50%;
+    height: 100%;
+    padding: 0 1;
+}
+
+.selection-side .label {
+    text-align: center;
+    padding: 1;
+    background: $surface-darken-1;
+}
+
+#comparison-panel {
+    width: 100%;
+    height: 1fr;
+}
+
+#comparison-container {
+    width: 100%;
+    height: 1fr;
+}
+
+.comparison-side {
+    width: 50%;
+    height: 100%;
+    border: solid $primary;
+    margin: 0 1;
+}
+
+.comparison-scroll {
+    height: 1fr;
+}
+
+.panel-header {
+    text-align: center;
+    padding: 1;
+    background: $surface-darken-2;
+}
+
+#comparison-header {
+    text-align: center;
+    padding: 1;
+}
+
+#comparison-nav {
+    text-align: center;
+    dock: bottom;
+}
+
+/* Detail screen */
+#detail-container {
+    width: 100%;
+    height: 100%;
+}
+
+#detail-header {
+    text-align: center;
+    padding: 1;
+}
+
+#detail-content {
+    width: 100%;
+    height: 1fr;
+}
+
+.detail-panel {
+    width: 1fr;
+    height: 100%;
+    border: solid $primary;
+    margin: 0 1;
+}
+
+.detail-scroll {
+    height: 1fr;
+    padding: 1;
+}
+
+.panel-title {
+    text-align: center;
+    padding: 1;
+    background: $surface-darken-2;
+}
+
+#full-prompt-container {
+    height: 1fr;
+    padding: 1;
+}
+
+#generic-container {
+    height: 1fr;
+    padding: 1;
+}
+
+/* Training screen */
+#training-container {
+    width: 100%;
+    height: 100%;
+}
+
+.nav-panel {
+    width: 30%;
+    height: 100%;
+    border-right: solid $primary;
+}
+
+.viewer-panel {
+    width: 70%;
+    height: 100%;
+}
+
+#training-tree {
+    height: 1fr;
+}
+
+#viewer-header {
+    dock: top;
+}
+
+#viewer-content {
+    height: 1fr;
+}
+
+/* Training sample screen */
+#sample-container {
+    width: 100%;
+    height: 100%;
+}
+
+#sample-header {
+    text-align: center;
+    padding: 1;
+}
+
+#sample-content {
+    width: 100%;
+    height: 1fr;
+}
+
+.sample-panel {
+    width: 1fr;
+    height: 100%;
+    border: solid $primary;
+    margin: 0 1;
+}
+
+.sample-scroll {
+    height: 1fr;
+    padding: 1;
+}
+
+#sample-metrics {
+    text-align: center;
+    dock: bottom;
+    padding: 1;
+}
+
+/* Hidden class */
+.hidden {
+    display: none;
+}
