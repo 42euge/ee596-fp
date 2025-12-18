@@ -1,14 +1,12 @@
 """Gemma model loading utilities."""
 
-import os
-from typing import Tuple
+from __future__ import annotations
 
-from flax import nnx
-import jax
-from orbax import checkpoint as ocp
-import qwix
-from tunix.models.gemma3 import model, params
-from tunix.models.gemma3.model import GemmaModel, ModelConfig
+import os
+from typing import TYPE_CHECKING, Any, Tuple
+
+if TYPE_CHECKING:
+    from tunix.models.gemma3.model import GemmaModel, ModelConfig
 
 
 # Default mesh configuration for sharding
@@ -18,8 +16,8 @@ DEFAULT_MESH = [(1, 1), ("fsdp", "tp")]
 def get_gemma_ref_model(
     ckpt_path: str,
     model_checkpoint_path: str,
-    mesh_config: list = None,
-) -> Tuple[GemmaModel, any, ModelConfig]:
+    mesh_config: list | None = None,
+) -> Tuple[Any, Any, Any]:
     """Load a Gemma reference model from checkpoint.
 
     Args:
@@ -37,6 +35,12 @@ def get_gemma_ref_model(
         ...     model_checkpoint_path=MODEL_CP_PATH,
         ... )
     """
+    # Lazy imports to avoid import errors when tunix isn't installed
+    from flax import nnx
+    from orbax import checkpoint as ocp
+    import qwix
+    from tunix.models.gemma3 import model, params
+
     if mesh_config is None:
         mesh_config = DEFAULT_MESH
 
@@ -64,7 +68,7 @@ def get_gemma_ref_model(
     return gemma_model, mesh, model_config
 
 
-def save_model_state(model: GemmaModel, ckpt_dir: str) -> str:
+def save_model_state(model: Any, ckpt_dir: str) -> str:
     """Save model state to checkpoint directory.
 
     Args:
@@ -74,6 +78,9 @@ def save_model_state(model: GemmaModel, ckpt_dir: str) -> str:
     Returns:
         Path to the saved state.
     """
+    from flax import nnx
+    from orbax import checkpoint as ocp
+
     _, state = nnx.split(model)
     checkpointer = ocp.StandardCheckpointer()
     state_path = os.path.join(ckpt_dir, "state")
@@ -82,13 +89,13 @@ def save_model_state(model: GemmaModel, ckpt_dir: str) -> str:
 
 
 def get_lora_model(
-    base_model: GemmaModel,
-    mesh,
+    base_model: Any,
+    mesh: Any,
     rank: int = 64,
     alpha: float = 64.0,
-    include: list = None,
-    exclude: list = None,
-) -> GemmaModel:
+    include: list | None = None,
+    exclude: list | None = None,
+) -> Any:
     """Create a LoRA model from a base model.
 
     Args:
@@ -107,6 +114,10 @@ def get_lora_model(
         >>> ref_model, mesh, config = get_gemma_ref_model(ckpt_path, model_cp_path)
         >>> lora_policy = get_lora_model(ref_model, mesh, rank=64, alpha=64.0)
     """
+    from flax import nnx
+    import jax
+    import qwix
+
     if include is None:
         include = [r".*attn.*"]
     if exclude is None:
