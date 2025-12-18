@@ -12,6 +12,27 @@ class TestModelsModule:
 
         assert DEFAULT_MESH == [(1, 1), ("fsdp", "tp")]
 
+    def test_prepare_gemma_checkpoint_signature(self):
+        """Test prepare_gemma_checkpoint has expected parameters."""
+        from tunrex.models import prepare_gemma_checkpoint
+        import inspect
+
+        sig = inspect.signature(prepare_gemma_checkpoint)
+        params = list(sig.parameters.keys())
+
+        assert "ckpt_dir" in params
+        assert "clean_dirs" in params
+
+    def test_prepare_gemma_checkpoint_defaults(self):
+        """Test prepare_gemma_checkpoint has expected defaults."""
+        from tunrex.models import prepare_gemma_checkpoint
+        import inspect
+
+        sig = inspect.signature(prepare_gemma_checkpoint)
+
+        assert sig.parameters["ckpt_dir"].default == "/tmp/intermediate_ckpt"
+        assert sig.parameters["clean_dirs"].default is None
+
     def test_get_gemma_ref_model_signature(self):
         """Test get_gemma_ref_model has expected parameters."""
         from tunrex.models import get_gemma_ref_model

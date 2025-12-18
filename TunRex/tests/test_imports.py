@@ -57,4 +57,5 @@ def test_top_level_exports():
     assert hasattr(tunrex, "DEFAULT_MESH")
     assert hasattr(tunrex, "get_gemma_ref_model")
     assert hasattr(tunrex, "get_lora_model")
+    assert hasattr(tunrex, "prepare_gemma_checkpoint")
     assert hasattr(tunrex, "save_model_state")

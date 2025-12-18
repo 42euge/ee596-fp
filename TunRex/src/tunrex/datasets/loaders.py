@@ -1,5 +1,5 @@
 """Data loaders for various sources (Kaggle, HuggingFace, TFDS)."""
-
+# TODO: refactor into separate files per source if this grows too large
 from __future__ import annotations
 
 import csv
@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from datasets import Dataset
 
-
+# TODO: move to gsm8k module
 def extract_hash_answer(text: str) -> str | None:
     """Extract answer after #### delimiter in GSM8K format.
 
@@ -25,7 +25,7 @@ def extract_hash_answer(text: str) -> str | None:
         return None
     return text.split("####")[1].strip()
 
-
+# TODO: move to a config module
 def download_kaggle_dataset(target_dir: str = "./data/gsm8k") -> str:
     """Download GSM8K dataset from Kaggle.
 

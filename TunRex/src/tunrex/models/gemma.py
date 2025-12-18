@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import gc
 import os
+import shutil
 from typing import TYPE_CHECKING, Any, Tuple
 
 if TYPE_CHECKING:
@@ -11,6 +13,68 @@ if TYPE_CHECKING:
 
 # Default mesh configuration for sharding
 DEFAULT_MESH = [(1, 1), ("fsdp", "tp")]
+
+
+def prepare_gemma_checkpoint(
+    ckpt_dir: str = "/tmp/intermediate_ckpt",
+    clean_dirs: list[str] | None = None,
+) -> Tuple[str, Any, Any]:
+    """Download Gemma model and save initial checkpoint for training.
+
+    This is a workaround for memory-efficient model loading. It:
+    1. Cleans up any existing checkpoint directories
+    2. Downloads and loads the Gemma 3 1B IT model
+    3. Saves the model state to a checkpoint
+    4. Cleans up to free memory
+
+    Args:
+        ckpt_dir: Directory to save the intermediate checkpoint.
+        clean_dirs: Additional directories to clean before saving.
+            Defaults to [ckpt_dir, "/tmp/content/ckpts"].
+
+    Returns:
+        Tuple of (ckpt_path, model_checkpoint_path, tokenizer).
+
+    Example:
+        >>> from tunrex import prepare_gemma_checkpoint, get_gemma_ref_model
+        >>> ckpt_path, model_cp_path, tokenizer = prepare_gemma_checkpoint()
+        >>> ref_model, mesh, config = get_gemma_ref_model(ckpt_path, model_cp_path)
+    """
+    from flax import nnx
+    from orbax import checkpoint as ocp
+    from tunix.models.gemma3 import model, params
+
+    # Default directories to clean
+    if clean_dirs is None:
+        clean_dirs = [ckpt_dir, "/tmp/content/ckpts"]
+
+    # Clean up existing directories
+    for dir_path in clean_dirs:
+        if os.path.exists(dir_path):
+            shutil.rmtree(dir_path, ignore_errors=True)
+
+    os.makedirs(ckpt_dir, exist_ok=True)
+
+    # Get model checkpoint path and create model
+    model_cp_path = params.GEMMA3_1B_IT
+    config = model.ModelConfig.gemma3_1b()
+    gemma = params.create_model_from_checkpoint(model_cp_path, config)
+    tokenizer = params.create_tokenizer()
+
+    # Save state checkpoint
+    checkpointer = ocp.StandardCheckpointer()
+    _, state = nnx.split(gemma)
+    state_path = os.path.join(ckpt_dir, "state")
+    checkpointer.save(state_path, state)
+    checkpointer.wait_until_finished()
+
+    # Clean up to free memory
+    del gemma
+    del state
+    gc.collect()
+
+    print(f"Gemma checkpoint saved to: {state_path}")
+    return state_path, model_cp_path, tokenizer
 
 
 def get_gemma_ref_model(
