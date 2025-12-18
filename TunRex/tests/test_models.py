@@ -33,6 +33,24 @@ class TestModelsModule:
         assert sig.parameters["ckpt_dir"].default == "/tmp/intermediate_ckpt"
         assert sig.parameters["clean_dirs"].default is None
 
+    def test_create_mesh_signature(self):
+        """Test create_mesh has expected parameters."""
+        from tunrex.models import create_mesh
+        import inspect
+
+        sig = inspect.signature(create_mesh)
+        params = list(sig.parameters.keys())
+
+        assert "mesh_config" in params
+
+    def test_create_mesh_default(self):
+        """Test create_mesh default parameter."""
+        from tunrex.models import create_mesh
+        import inspect
+
+        sig = inspect.signature(create_mesh)
+        assert sig.parameters["mesh_config"].default is None
+
     def test_get_gemma_ref_model_signature(self):
         """Test get_gemma_ref_model has expected parameters."""
         from tunrex.models import get_gemma_ref_model

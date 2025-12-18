@@ -16,6 +16,7 @@ from tunrex.datasets import (
 # Model loading API
 from tunrex.models import (
     DEFAULT_MESH,
+    create_mesh,
     get_gemma_ref_model,
     get_lora_model,
     prepare_gemma_checkpoint,
@@ -34,6 +35,7 @@ __all__ = [
     "load_openrubrics",
     # Models
     "DEFAULT_MESH",
+    "create_mesh",
     "get_gemma_ref_model",
     "get_lora_model",
     "prepare_gemma_checkpoint",

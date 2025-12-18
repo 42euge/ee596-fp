@@ -77,6 +77,40 @@ def prepare_gemma_checkpoint(
     return state_path, model_cp_path, tokenizer
 
 
+def create_mesh(mesh_config: list | None = None) -> Any:
+    """Create a JAX mesh for distributed training.
+
+    Args:
+        mesh_config: List of [(axis_shape_tuple), (axis_names_tuple)].
+            Defaults to DEFAULT_MESH = [(1, 1), ("fsdp", "tp")].
+
+    Returns:
+        A jax.sharding.Mesh object.
+
+    Example:
+        >>> mesh = create_mesh()  # Uses default (1,1) mesh
+        >>> mesh = create_mesh([(2, 4), ("fsdp", "tp")])  # 2x4 mesh
+    """
+    import jax
+    import numpy as np
+
+    if mesh_config is None:
+        mesh_config = DEFAULT_MESH
+
+    axis_shapes, axis_names = mesh_config
+    devices = jax.devices()
+    num_devices = len(devices)
+    total_requested = np.prod(axis_shapes)
+
+    if total_requested > num_devices:
+        # Fall back to single device if not enough devices
+        axis_shapes = (1, 1)
+
+    # Use jax.make_mesh for simple cases
+    mesh = jax.make_mesh(axis_shapes, axis_names)
+    return mesh
+
+
 def get_gemma_ref_model(
     ckpt_path: str,
     model_checkpoint_path: str,
@@ -102,13 +136,15 @@ def get_gemma_ref_model(
     # Lazy imports to avoid import errors when tunix isn't installed
     from flax import nnx
     from orbax import checkpoint as ocp
-    import qwix
     from tunix.models.gemma3 import model, params
 
     if mesh_config is None:
         mesh_config = DEFAULT_MESH
 
     model_config = model.ModelConfig.gemma3_1b()
+
+    # Create mesh for sharding
+    mesh = create_mesh(mesh_config)
 
     # Create abstract model shape
     abs_gemma = nnx.eval_shape(
@@ -117,9 +153,7 @@ def get_gemma_ref_model(
 
     # Setup sharding
     abs_state = nnx.state(abs_gemma)
-    mesh = qwix.create_mesh(mesh_config)
     sharding_rules = model.GemmaModel.default_sharding_config(model_config, mesh)
-    shardings = qwix.make_shardings(abs_state, sharding_rules)
 
     # Restore checkpoint
     checkpointer = ocp.StandardCheckpointer()
