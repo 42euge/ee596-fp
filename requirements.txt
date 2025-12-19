@@ -12,6 +12,11 @@ pandas>=2.0.0
 # Utilities
 tqdm>=4.66.0
 huggingface_hub>=0.21.0
+numpy>=1.24.0
+
+# Hyperparameter search (optional, for Bayesian optimization)
+# optuna>=3.5.0
+# matplotlib>=3.7.0  # for plotting optimization history
 
 # Optional: For 4-bit/8-bit quantization (CUDA only)
 # bitsandbytes>=0.42.0
