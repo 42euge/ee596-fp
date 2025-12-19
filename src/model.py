@@ -22,14 +22,46 @@ except ImportError:
     HAS_GEMMA3_CLASS = False
 from peft import PeftModel, LoraConfig, get_peft_model
 
+# Import ecolab for Colab/Kaggle environment support
+try:
+    from etils import ecolab
+    HAS_ECOLAB = True
+except ImportError:
+    HAS_ECOLAB = False
+    ecolab = None
+
 from .config import (
     Config, get_default_config, format_prompt, get_system_prompt,
     REASONING_START, REASONING_END, SOLUTION_START, SOLUTION_END
 )
 
 
+def setup_notebook_env() -> None:
+    """Setup notebook environment (Colab/Kaggle) with ecolab.
+
+    Configures:
+    - Auto-plotting for better visualization in notebooks
+    - Environment detection and reporting
+    """
+    if not HAS_ECOLAB:
+        return
+
+    # Auto-configure plotting for notebook environments
+    try:
+        ecolab.auto_plot_config()
+        if ecolab.is_notebook():
+            print("✅ Notebook environment configured with ecolab")
+    except Exception as e:
+        print(f"⚠️  Warning: Could not configure notebook environment: {e}")
+
+
 def get_device(preferred: str = "auto") -> str:
     """Determine the best available device.
+
+    Supports auto-detection for:
+    - Google Colab (GPU/TPU)
+    - Kaggle notebooks (GPU)
+    - Local CUDA, MPS (Apple Silicon), or CPU
 
     Args:
         preferred: Preferred device ("auto", "cuda", "mps", "cpu")
@@ -40,6 +72,20 @@ def get_device(preferred: str = "auto") -> str:
     if preferred != "auto":
         return preferred
 
+    # Use ecolab for environment detection if available
+    if HAS_ECOLAB:
+        # Check if we're in Colab or Kaggle
+        if ecolab.is_notebook():
+            print(f"🔍 Detected notebook environment: {ecolab.get_notebook_name()}")
+
+        # ecolab can help detect Colab-specific features
+        if hasattr(ecolab, 'is_colab') and ecolab.is_colab():
+            print("📓 Running in Google Colab")
+
+        if hasattr(ecolab, 'is_kaggle') and ecolab.is_kaggle():
+            print("📊 Running in Kaggle")
+
+    # Standard device detection
     if torch.cuda.is_available():
         return "cuda"
     elif torch.backends.mps.is_available():

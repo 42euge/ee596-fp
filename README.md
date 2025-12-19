@@ -25,9 +25,12 @@ This project fine-tunes Google's Gemma3-1B model using Group Relative Policy Opt
 │   ├── main.py           # Entry point for inference/evaluation
 │   ├── model.py          # Model loading and inference code
 │   ├── config.py         # Hyperparameters and configuration
-│   └── utils.py          # Helper functions (data loading, rewards, etc.)
+│   ├── utils.py          # Helper functions (data loading, rewards, etc.)
+│   └── hyperparam_search.py  # Hyperparameter search utilities
 ├── demo/
 │   └── demo.py           # Interactive demo script
+├── examples/
+│   └── colab_kaggle_example.ipynb  # Google Colab/Kaggle notebook
 ├── data/                  # Dataset files (download separately)
 ├── checkpoints/           # Saved model weights
 └── results/               # Generated outputs and evaluation results
@@ -51,6 +54,8 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```bash
 pip install -r requirements.txt
 ```
+
+**Note**: The project includes `etils[ecolab]` for automatic environment detection in Google Colab and Kaggle notebooks.
 
 ### 4. Authenticate with HuggingFace (Required)
 
@@ -120,6 +125,39 @@ Evaluate the model on the GSM8K math benchmark:
 ```bash
 python -m src.main --mode evaluate --num-samples 100 --output results/eval.json
 ```
+
+## Running in Google Colab or Kaggle
+
+The project includes built-in support for Google Colab and Kaggle environments using `etils[ecolab]`.
+
+### Quick Start in Colab/Kaggle
+
+1. Open the example notebook: [`examples/colab_kaggle_example.ipynb`](examples/colab_kaggle_example.ipynb)
+2. The notebook automatically:
+   - Detects your environment (Colab/Kaggle)
+   - Configures optimal plotting settings
+   - Selects the best available device (GPU/CPU)
+
+### Manual Setup
+
+```python
+from src import setup_notebook_env, load_model, get_device
+
+# Configure notebook environment
+setup_notebook_env()
+
+# Auto-detect device
+device = get_device()
+print(f"Using device: {device}")
+
+# Load model
+model = load_model(device=device, load_in_4bit=True)  # 4-bit quantization for GPU
+```
+
+The environment detection will automatically print:
+- 📓 Running in Google Colab (if in Colab)
+- 📊 Running in Kaggle (if in Kaggle)
+- 🔍 Detected notebook environment details
 
 ## Expected Output
 

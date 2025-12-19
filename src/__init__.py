@@ -16,7 +16,7 @@ from .config import (
     SOLUTION_END,
 )
 
-from .model import GemmaModel, load_model, get_device
+from .model import GemmaModel, load_model, get_device, setup_notebook_env
 
 from .utils import (
     extract_reasoning_and_answer,
@@ -64,6 +64,7 @@ __all__ = [
     "GemmaModel",
     "load_model",
     "get_device",
+    "setup_notebook_env",
     # Utils
     "extract_reasoning_and_answer",
     "extract_numerical_answer",
