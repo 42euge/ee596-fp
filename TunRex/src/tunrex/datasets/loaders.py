@@ -8,6 +8,8 @@ import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import grain
+
 if TYPE_CHECKING:
     from datasets import Dataset
 
@@ -222,3 +224,143 @@ def load_openrubrics(
 
     print(f"Loaded {len(processed)} examples from OpenRubrics ({split})")
     return processed
+
+
+def get_dataset(
+    data_dir: str,
+    split: str = "train",
+    source: str = "tfds",
+    template: str | None = None,
+    system_prompt: str | None = None,
+    seed: int = 42,
+) -> grain.MapDataset:
+    """Load and preprocess GSM8K dataset as a grain MapDataset.
+
+    Args:
+        data_dir: Directory to store/load the dataset
+        split: Dataset split ("train" or "test")
+        source: Data source ("tfds" or "kaggle")
+        template: Prompt template with {system_prompt} and {question} placeholders.
+            If None, uses a default Gemma-style template.
+        system_prompt: System prompt for the model. If None, uses a default
+            reasoning-focused prompt.
+        seed: Random seed for shuffling
+
+    Returns:
+        grain.MapDataset with "prompts", "question", and "answer" keys
+    """
+    if not os.path.exists(data_dir):
+        os.makedirs(data_dir)
+
+    if template is None:
+        template = """<start_of_turn>user
+{system_prompt}
+
+{question}<end_of_turn>
+<start_of_turn>model
+"""
+
+    if system_prompt is None:
+        system_prompt = (
+            "You are given a problem. First, think about the problem "
+            "and provide your reasoning. Place it between <reasoning> and "
+            "</reasoning>. Then, provide the final answer (i.e., just one "
+            "numerical value) between <answer> and </answer>."
+        )
+
+    if source == "tfds":
+        data = load_from_tfds(data_dir, split)
+    elif source == "kaggle":
+        data = load_from_kaggle(data_dir, split)
+    else:
+        raise ValueError(f"Unknown source: {source}")
+
+    def _as_text(v: Any) -> str:
+        return v if isinstance(v, str) else v.decode("utf-8")
+
+    dataset = (
+        grain.MapDataset.source(data)
+        .shuffle(seed=seed)
+        .map(
+            lambda x: {
+                # passed to model forward pass
+                "prompts": template.format(
+                    system_prompt=system_prompt,
+                    question=_as_text(x["question"]),
+                ),
+                # passed to reward functions
+                "question": _as_text(x["question"]),
+                # passed to reward functions
+                "answer": extract_hash_answer(_as_text(x["answer"])),
+            }
+        )
+    )
+    return dataset
+
+
+def get_train_val_test_datasets(
+    train_data_dir: str,
+    test_data_dir: str,
+    source: str = "tfds",
+    batch_size: int = 1,
+    num_batches: int | None = None,
+    num_test_batches: int | None = None,
+    train_fraction: float = 1.0,
+    num_epochs: int = 1,
+    template: str | None = None,
+    system_prompt: str | None = None,
+    seed: int = 42,
+) -> tuple[grain.MapDataset, grain.MapDataset | None, grain.MapDataset]:
+    """Load and prepare train, validation, and test datasets.
+
+    Args:
+        train_data_dir: Directory for training data
+        test_data_dir: Directory for test data
+        source: Data source ("tfds" or "kaggle")
+        batch_size: Batch size for all datasets
+        num_batches: Max number of training batches (None for all)
+        num_test_batches: Max number of test batches (None for all)
+        train_fraction: Fraction of data for training (rest goes to validation).
+            If 1.0, no validation set is created.
+        num_epochs: Number of epochs to repeat training data
+        template: Prompt template (see get_dataset for details)
+        system_prompt: System prompt (see get_dataset for details)
+        seed: Random seed for shuffling
+
+    Returns:
+        Tuple of (train_dataset, val_dataset, test_dataset).
+        val_dataset is None if train_fraction == 1.0
+    """
+    dataset = get_dataset(
+        train_data_dir,
+        split="train",
+        source=source,
+        template=template,
+        system_prompt=system_prompt,
+        seed=seed,
+    ).batch(batch_size)
+
+    if num_batches is not None:
+        dataset = dataset[:num_batches]
+
+    if train_fraction == 1.0:
+        train_dataset = dataset.repeat(num_epochs)
+        val_dataset = None
+    else:
+        split_idx = int(len(dataset) * train_fraction)
+        train_dataset = dataset[:split_idx].repeat(num_epochs)
+        val_dataset = dataset[split_idx:].repeat(num_epochs)
+
+    test_dataset = get_dataset(
+        test_data_dir,
+        split="test",
+        source=source,
+        template=template,
+        system_prompt=system_prompt,
+        seed=seed,
+    ).batch(batch_size)
+
+    if num_test_batches is not None:
+        test_dataset = test_dataset[:num_test_batches]
+
+    return train_dataset, val_dataset, test_dataset

@@ -1,8 +1,20 @@
 """Configuration classes for TunRex dataset loading."""
 
 from dataclasses import dataclass, field
-from typing import Callable, Literal
+from typing import Callable, Literal, Optional
 
+
+# Reasoning and answer tag definitions
+reasoning_start = "<reasoning>"
+reasoning_end = "</reasoning>"
+solution_start = "<answer>"
+solution_end = "</answer>"
+
+# Uppercase aliases
+REASONING_START = reasoning_start
+REASONING_END = reasoning_end
+SOLUTION_START = solution_start
+SOLUTION_END = solution_end
 
 # Default template for Gemma-style models
 DEFAULT_TEMPLATE = """\
@@ -13,10 +25,27 @@ DEFAULT_TEMPLATE = """\
 <start_of_turn>model
 """
 
-DEFAULT_SYSTEM_PROMPT = """\
-You are given a problem. Think about the problem and provide your reasoning. \
-Place it between <reasoning> and </reasoning>. \
-Then, provide the final answer between <answer> and </answer>."""
+# Baseline system prompt (version 0) - exact match for Gemma GRPO training
+DEFAULT_SYSTEM_PROMPT = f"""\
+You are given a problem. First, think about the problem and provide your reasoning. \
+Place it between {reasoning_start} and {reasoning_end}. \
+Then, provide the final answer (i.e., just one numerical value) between {solution_start} and {solution_end}."""
+
+# System prompt variants
+SYSTEM_PROMPTS = {
+    0: DEFAULT_SYSTEM_PROMPT,
+    1: f"You are given a problem. Think about the problem and provide your reasoning. Place it between {reasoning_start} and {reasoning_end}. Then, provide the final answer between {solution_start} and {solution_end}.",
+    2: f"You are given a problem. Think carefully and show your detailed reasoning step-by-step. Place your reasoning between {reasoning_start} and {reasoning_end}. After completing your reasoning, provide the final answer between {solution_start} and {solution_end}.",
+    3: f"You are given a problem. Let's think step by step. Provide your reasoning process between {reasoning_start} and {reasoning_end}. Then provide the final answer between {solution_start} and {solution_end}.",
+    4: f"You are given a problem. First, understand what is being asked. Then, work through your reasoning carefully. Place your reasoning between {reasoning_start} and {reasoning_end}. Finally, provide your answer between {solution_start} and {solution_end}.",
+    5: f"You are given a problem. Consider different approaches to solve it. Think through your reasoning, exploring multiple paths if helpful. Place your complete reasoning between {reasoning_start} and {reasoning_end}. Then provide the best final answer between {solution_start} and {solution_end}.",
+    6: f"Solve the problem below. Show your work in {reasoning_start}{reasoning_end}. Give your answer in {solution_start}{solution_end}.",
+}
+
+
+def get_system_prompt(version: int = 0) -> str:
+    """Get system prompt by version number."""
+    return SYSTEM_PROMPTS.get(version, SYSTEM_PROMPTS[0])
 
 
 @dataclass
