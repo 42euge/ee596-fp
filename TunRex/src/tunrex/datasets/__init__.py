@@ -28,6 +28,18 @@ from tunrex.datasets.loaders import (
     load_from_tfds,
     load_openrubrics,
 )
+from tunrex.datasets.rewards import (
+    match_format,
+    match_numbers,
+    match_format_exactly,
+    match_format_approximately,
+    check_answer,
+    check_numbers,
+)
+from tunrex.datasets.evaluate import (
+    generate,
+    evaluate,
+)
 
 __all__ = [
     # Core classes
@@ -56,4 +68,14 @@ __all__ = [
     "load_from_kaggle",
     "load_from_tfds",
     "load_openrubrics",
+    # Rewards
+    "match_format",
+    "match_numbers",
+    "match_format_exactly",
+    "match_format_approximately",
+    "check_answer",
+    "check_numbers",
+    # Evaluate
+    "generate",
+    "evaluate",
 ]
