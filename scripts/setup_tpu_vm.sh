@@ -8,29 +8,32 @@ echo "=========================================="
 echo "Setting up TPU VM for GRPO Training"
 echo "=========================================="
 
-# Update system packages
-echo "[1/6] Updating system packages..."
+# Update system packages and install Python 3.11
+echo "[1/7] Installing Python 3.11..."
 sudo apt-get update -qq
-sudo apt-get install -y -qq python3-pip python3-venv git
+sudo apt-get install -y -qq software-properties-common
+sudo add-apt-repository -y ppa:deadsnakes/ppa
+sudo apt-get update -qq
+sudo apt-get install -y -qq python3.11 python3.11-venv python3.11-dev git
 
-# Create and activate virtual environment
-echo "[2/6] Creating Python virtual environment..."
-python3 -m venv ~/venv
+# Create and activate virtual environment with Python 3.11
+echo "[2/7] Creating Python 3.11 virtual environment..."
+python3.11 -m venv ~/venv
 source ~/venv/bin/activate
 
 # Upgrade pip
 pip install --upgrade pip -q
 
 # Install JAX with TPU support
-echo "[3/6] Installing JAX with TPU support..."
+echo "[3/7] Installing JAX with TPU support..."
 pip install "jax[tpu]" -f https://storage.googleapis.com/jax-releases/libtpu_releases.html -q
 
 # Install Flax and Optax
-echo "[4/6] Installing Flax and Optax..."
+echo "[4/7] Installing Flax and Optax..."
 pip install flax optax grain-nightly -q
 
 # Install core dependencies
-echo "[5/6] Installing project dependencies..."
+echo "[5/7] Installing project dependencies..."
 pip install transformers>=4.40.0 -q
 pip install datasets>=2.18.0 -q
 pip install huggingface_hub>=0.21.0 -q
@@ -38,13 +41,16 @@ pip install safetensors>=0.4.0 -q
 pip install tqdm>=4.66.0 -q
 
 # Install Tunix (Google's training framework)
-echo "[6/6] Installing Tunix..."
+echo "[6/7] Installing Tunix..."
 pip install google-tunix -q
 
 # Install TunRex (local package) if it exists
+echo "[7/7] Installing TunRex..."
 if [ -d "TunRex" ]; then
-    echo "Installing TunRex local package..."
     pip install -e TunRex -q
+    echo "TunRex installed from local package"
+else
+    echo "TunRex directory not found, skipping"
 fi
 
 # Verify installation
