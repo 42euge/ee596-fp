@@ -94,18 +94,26 @@ jobs:
             --command="mkdir -p ~/training && tar -xzf ~/repo.tar.gz -C ~/training"
 
       - name: Setup TPU VM environment
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
+          # Write env vars to a file and copy to TPU VM
+          echo "export HF_TOKEN='${HF_TOKEN}'" > /tmp/env.sh
+          gcloud compute tpus tpu-vm scp /tmp/env.sh $TPU_NAME:~/env.sh \
+            --project=$GCP_PROJECT \
+            --zone=$TPU_ZONE
+
           gcloud compute tpus tpu-vm ssh $TPU_NAME \
             --project=$GCP_PROJECT \
             --zone=$TPU_ZONE \
-            --command="cd ~/training && HF_TOKEN='${{ secrets.HF_TOKEN }}' bash scripts/setup_tpu_vm.sh"
+            --command="source ~/env.sh && cd ~/training && bash scripts/setup_tpu_vm.sh"
 
       - name: Run training
         run: |
           gcloud compute tpus tpu-vm ssh $TPU_NAME \
             --project=$GCP_PROJECT \
             --zone=$TPU_ZONE \
-            --command="cd ~/training && source ~/venv/bin/activate && HF_TOKEN='${{ secrets.HF_TOKEN }}' python scripts/train_small.py --num-steps $NUM_STEPS"
+            --command="source ~/env.sh && cd ~/training && source ~/venv/bin/activate && python scripts/train_small.py --num-steps $NUM_STEPS"
 
       - name: Cleanup TPU VM
         if: always()
