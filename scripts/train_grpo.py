@@ -222,10 +222,19 @@ def main():
 
     # Step 5: Download model
     print(f"\n[5/8] Downloading model: {args.model_id}...")
+
+    # Get HF token for gated models
+    hf_token = os.environ.get("HF_TOKEN")
+    if hf_token:
+        print("  Using HF_TOKEN for authentication")
+    else:
+        print("  WARNING: HF_TOKEN not set, gated models may fail to download")
+
     ignore_patterns = ["*.pth"]
     local_model_path = snapshot_download(
         repo_id=args.model_id,
-        ignore_patterns=ignore_patterns
+        ignore_patterns=ignore_patterns,
+        token=hf_token
     )
     print(f"  Model downloaded to: {local_model_path}")
 
