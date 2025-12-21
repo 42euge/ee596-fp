@@ -105,19 +105,14 @@ def main():
     # Step 5: Load Gemma tokenizer
     print(f"\n[5/5] Loading Gemma model...")
 
-    hf_token = os.environ.get("HF_TOKEN")
-    if hf_token:
-        print("  HF_TOKEN found in environment")
-    else:
-        print("  ERROR: HF_TOKEN not set, cannot load Gemma")
-        sys.exit(1)
-
     model_id = "google/gemma-3-1b-it"
     try:
-        tokenizer = AutoTokenizer.from_pretrained(model_id, token=hf_token)
+        # Uses cached HuggingFace token from huggingface-cli login
+        tokenizer = AutoTokenizer.from_pretrained(model_id)
         print(f"  Tokenizer loaded: {model_id}")
     except Exception as e:
         print(f"ERROR: Failed to load Gemma tokenizer: {e}")
+        print("  Make sure you're logged in with: huggingface-cli login")
         sys.exit(1)
 
     print("\n" + "=" * 60)
