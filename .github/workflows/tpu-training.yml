@@ -104,18 +104,18 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          # Write token to temp file and scp to TPU VM
+          # Write token directly to HuggingFace cache location
           echo "${HF_TOKEN}" > /tmp/hf_token.txt
           gcloud compute tpus tpu-vm scp /tmp/hf_token.txt $TPU_NAME:~/hf_token.txt \
             --project=$GCP_PROJECT \
             --zone=$TPU_ZONE
           rm /tmp/hf_token.txt
 
-          # Use the token file to login
+          # Create HF cache dir and write token file
           gcloud compute tpus tpu-vm ssh $TPU_NAME \
             --project=$GCP_PROJECT \
             --zone=$TPU_ZONE \
-            --command="source ~/venv/bin/activate && huggingface-cli login --token \$(cat ~/hf_token.txt) && rm ~/hf_token.txt"
+            --command="mkdir -p ~/.cache/huggingface && mv ~/hf_token.txt ~/.cache/huggingface/token"
 
       - name: Run training
         run: |
