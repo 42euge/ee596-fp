@@ -102,21 +102,23 @@ def main():
         print(f"ERROR: TPU computation failed: {e}")
         sys.exit(1)
 
-    # Step 5: Load tokenizer (validates HF access)
-    print(f"\n[5/5] Testing HuggingFace access...")
+    # Step 5: Load Gemma tokenizer
+    print(f"\n[5/5] Loading Gemma model...")
 
     hf_token = os.environ.get("HF_TOKEN")
     if hf_token:
         print("  HF_TOKEN found in environment")
     else:
-        print("  WARNING: HF_TOKEN not set, skipping gated model test")
+        print("  ERROR: HF_TOKEN not set, cannot load Gemma")
+        sys.exit(1)
 
+    model_id = "google/gemma-3-1b-it"
     try:
-        # Test with a non-gated model first
-        tokenizer = AutoTokenizer.from_pretrained("google/flan-t5-small")
-        print("  Tokenizer test: PASSED")
+        tokenizer = AutoTokenizer.from_pretrained(model_id, token=hf_token)
+        print(f"  Tokenizer loaded: {model_id}")
     except Exception as e:
-        print(f"WARNING: Tokenizer test failed: {e}")
+        print(f"ERROR: Failed to load Gemma tokenizer: {e}")
+        sys.exit(1)
 
     print("\n" + "=" * 60)
     print("CI VALIDATION PASSED")
