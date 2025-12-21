@@ -124,11 +124,14 @@ jobs:
             --command="cd ~/training && HF_TOKEN='${{ secrets.HF_TOKEN }}' WANDB_API_KEY='${{ secrets.WANDB_API_KEY }}' bash scripts/setup_tpu_vm.sh"
 
       - name: Run GRPO Training
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
         run: |
           # Build the run name
           RUN_NAME_ARG=""
           if [ -n "$RUN_NAME" ]; then
-            RUN_NAME_ARG="--run-name '$RUN_NAME'"
+            RUN_NAME_ARG="--run-name $RUN_NAME"
           fi
 
           # Build LoRA argument
@@ -137,20 +140,13 @@ jobs:
             LORA_ARG="--use-lora"
           fi
 
+          # Create the training command
+          TRAIN_CMD="cd ~/training && source ~/venv/bin/activate && export HF_TOKEN='${HF_TOKEN}' && export WANDB_API_KEY='${WANDB_API_KEY}' && python scripts/train_grpo.py --num-steps $NUM_STEPS --model-id $MODEL_ID --learning-rate $LEARNING_RATE --batch-size $BATCH_SIZE --wandb-project tunix-grpo-ci $LORA_ARG $RUN_NAME_ARG"
+
           gcloud compute tpus tpu-vm ssh $TPU_NAME \
             --project=$GCP_PROJECT \
             --zone=$TPU_ZONE \
-            --command="cd ~/training && source ~/venv/bin/activate && \
-              HF_TOKEN='${{ secrets.HF_TOKEN }}' \
-              WANDB_API_KEY='${{ secrets.WANDB_API_KEY }}' \
-              python scripts/train_grpo.py \
-                --num-steps $NUM_STEPS \
-                --model-id '$MODEL_ID' \
-                --learning-rate $LEARNING_RATE \
-                --batch-size $BATCH_SIZE \
-                --wandb-project tunix-grpo-ci \
-                $LORA_ARG \
-                $RUN_NAME_ARG"
+            --command="$TRAIN_CMD"
 
       - name: Cleanup TPU VM
         if: always()
