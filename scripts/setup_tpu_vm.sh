@@ -33,19 +33,21 @@ echo "[4/7] Installing Flax and Optax..."
 pip install flax optax grain-nightly -q
 
 # Install core dependencies
-echo "[5/7] Installing project dependencies..."
+echo "[5/8] Installing project dependencies..."
 pip install transformers>=4.40.0 -q
 pip install datasets>=2.18.0 -q
 pip install huggingface_hub>=0.21.0 -q
 pip install safetensors>=0.4.0 -q
 pip install tqdm>=4.66.0 -q
+pip install wandb>=0.16.0 -q
+pip install tensorflow tensorflow_datasets -q
 
 # Install Tunix (Google's training framework)
-echo "[6/7] Installing Tunix..."
+echo "[6/8] Installing Tunix..."
 pip install google-tunix -q
 
 # Install TunRex (local package) if it exists
-echo "[7/7] Installing TunRex..."
+echo "[7/8] Installing TunRex..."
 if [ -d "TunRex" ]; then
     pip install -e TunRex -q
     echo "TunRex installed from local package"
@@ -84,6 +86,16 @@ if [ -n "$HF_TOKEN" ]; then
     echo "Setting up HuggingFace authentication..."
     python3 -c "from huggingface_hub import login; login(token='$HF_TOKEN')"
     echo "HuggingFace authentication: OK"
+fi
+
+# Setup W&B if API key is provided
+echo ""
+echo "[8/8] Setting up W&B..."
+if [ -n "$WANDB_API_KEY" ]; then
+    python3 -c "import wandb; wandb.login(key='$WANDB_API_KEY')"
+    echo "W&B authentication: OK"
+else
+    echo "WANDB_API_KEY not set, skipping W&B login"
 fi
 
 echo ""

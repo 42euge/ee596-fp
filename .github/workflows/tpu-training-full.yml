@@ -1,0 +1,162 @@
+name: TPU Training (Full)
+
+on:
+  workflow_dispatch:
+    inputs:
+      num_steps:
+        description: 'Number of training steps'
+        default: '100'
+        type: string
+      tpu_type:
+        description: 'TPU accelerator type'
+        default: 'v5litepod-4'
+        type: choice
+        options:
+          - v5litepod-1
+          - v5litepod-4
+          - v5litepod-8
+          - v5litepod-16
+      model_id:
+        description: 'Model ID (HuggingFace)'
+        default: 'google/gemma-3-1b-it'
+        type: string
+      learning_rate:
+        description: 'Learning rate'
+        default: '3e-6'
+        type: string
+      batch_size:
+        description: 'Batch size'
+        default: '1'
+        type: string
+      run_name:
+        description: 'W&B run name (optional)'
+        default: ''
+        type: string
+      use_lora:
+        description: 'Use LoRA for training'
+        default: true
+        type: boolean
+
+env:
+  TPU_NAME: training-${{ github.run_id }}
+  TPU_ZONE: us-central1-a
+  GCP_PROJECT: kaggle-euge
+  TPU_TYPE: ${{ github.event.inputs.tpu_type || 'v5litepod-4' }}
+  NUM_STEPS: ${{ github.event.inputs.num_steps || '100' }}
+  MODEL_ID: ${{ github.event.inputs.model_id || 'google/gemma-3-1b-it' }}
+  LEARNING_RATE: ${{ github.event.inputs.learning_rate || '3e-6' }}
+  BATCH_SIZE: ${{ github.event.inputs.batch_size || '1' }}
+  RUN_NAME: ${{ github.event.inputs.run_name || '' }}
+  USE_LORA: ${{ github.event.inputs.use_lora || 'true' }}
+
+jobs:
+  tpu-training:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180  # 3 hours for longer training runs
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
+
+      - name: Create TPU VM
+        id: create-tpu
+        run: |
+          echo "Creating TPU VM: $TPU_NAME (type: $TPU_TYPE)"
+
+          gcloud compute tpus tpu-vm create $TPU_NAME \
+            --project=$GCP_PROJECT \
+            --zone=$TPU_ZONE \
+            --accelerator-type=$TPU_TYPE \
+            --version=v2-alpha-tpuv5-lite \
+            --preemptible
+
+          echo "tpu_created=true" >> $GITHUB_OUTPUT
+
+      - name: Wait for TPU VM to be ready
+        run: |
+          echo "Waiting for TPU VM to be ready..."
+          sleep 30
+
+          # Wait for SSH to be available
+          for i in {1..10}; do
+            if gcloud compute tpus tpu-vm ssh $TPU_NAME \
+              --project=$GCP_PROJECT \
+              --zone=$TPU_ZONE \
+              --command="echo 'TPU VM is ready'" 2>/dev/null; then
+              echo "TPU VM is ready!"
+              break
+            fi
+            echo "Attempt $i: TPU VM not ready yet, waiting..."
+            sleep 15
+          done
+
+      - name: Copy code to TPU VM
+        run: |
+          # Create a tarball of the repository
+          tar -czf /tmp/repo.tar.gz -C $GITHUB_WORKSPACE .
+
+          # Copy to TPU VM
+          gcloud compute tpus tpu-vm scp /tmp/repo.tar.gz $TPU_NAME:~/repo.tar.gz \
+            --project=$GCP_PROJECT \
+            --zone=$TPU_ZONE
+
+          # Extract on TPU VM
+          gcloud compute tpus tpu-vm ssh $TPU_NAME \
+            --project=$GCP_PROJECT \
+            --zone=$TPU_ZONE \
+            --command="mkdir -p ~/training && tar -xzf ~/repo.tar.gz -C ~/training"
+
+      - name: Setup TPU VM environment
+        run: |
+          gcloud compute tpus tpu-vm ssh $TPU_NAME \
+            --project=$GCP_PROJECT \
+            --zone=$TPU_ZONE \
+            --command="cd ~/training && HF_TOKEN='${{ secrets.HF_TOKEN }}' WANDB_API_KEY='${{ secrets.WANDB_API_KEY }}' bash scripts/setup_tpu_vm.sh"
+
+      - name: Run GRPO Training
+        run: |
+          # Build the run name
+          RUN_NAME_ARG=""
+          if [ -n "$RUN_NAME" ]; then
+            RUN_NAME_ARG="--run-name '$RUN_NAME'"
+          fi
+
+          # Build LoRA argument
+          LORA_ARG=""
+          if [ "$USE_LORA" = "true" ]; then
+            LORA_ARG="--use-lora"
+          fi
+
+          gcloud compute tpus tpu-vm ssh $TPU_NAME \
+            --project=$GCP_PROJECT \
+            --zone=$TPU_ZONE \
+            --command="cd ~/training && source ~/venv/bin/activate && \
+              HF_TOKEN='${{ secrets.HF_TOKEN }}' \
+              WANDB_API_KEY='${{ secrets.WANDB_API_KEY }}' \
+              python scripts/train_grpo.py \
+                --num-steps $NUM_STEPS \
+                --model-id '$MODEL_ID' \
+                --learning-rate $LEARNING_RATE \
+                --batch-size $BATCH_SIZE \
+                --wandb-project tunix-grpo-ci \
+                $LORA_ARG \
+                $RUN_NAME_ARG"
+
+      - name: Cleanup TPU VM
+        if: always()
+        run: |
+          echo "Cleaning up TPU VM: $TPU_NAME"
+          gcloud compute tpus tpu-vm delete $TPU_NAME \
+            --project=$GCP_PROJECT \
+            --zone=$TPU_ZONE \
+            --quiet || echo "TPU VM cleanup failed or VM doesn't exist"
