@@ -153,17 +153,23 @@ jobs:
           echo "=== Kernel metadata ==="
           cat kernel-metadata.json
           echo ""
-          echo "=== Notebook size ==="
-          ls -lh notebook.ipynb
+          echo "=== Files in kernel directory ==="
+          ls -la
           echo ""
           echo "=== Pushing to Kaggle ==="
-          kaggle kernels push -p . 2>&1 || {
-            echo "Push failed. Trying with verbose output..."
-            kaggle kernels push -p . -v 2>&1 || true
+          OUTPUT=$(kaggle kernels push -p . 2>&1)
+          echo "$OUTPUT"
+
+          # Check for actual success (should contain URL or version info)
+          if echo "$OUTPUT" | grep -qi "error"; then
+            echo "ERROR: Kaggle push failed!"
             exit 1
-          }
+          fi
+
           echo "Kernel pushed successfully!"
           echo "kernel_id=$KAGGLE_USERNAME/$KERNEL_SLUG" >> $GITHUB_OUTPUT
+          echo ""
+          echo "View at: https://www.kaggle.com/code/$KAGGLE_USERNAME/$KERNEL_SLUG"
 
       - name: Wait for kernel completion
         if: ${{ github.event.inputs.wait_for_completion == 'true' }}
