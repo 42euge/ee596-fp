@@ -27,7 +27,7 @@ on:
 env:
   KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
   KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
-  KERNEL_SLUG: tunix-grpo-training
+  KERNEL_SLUG: grpo-train-${{ github.run_number }}
 
 jobs:
   kaggle-training:
