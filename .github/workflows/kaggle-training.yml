@@ -74,26 +74,25 @@ jobs:
           # Create kernel metadata
           RUN_NAME="${{ github.event.inputs.run_name }}"
           if [ -z "$RUN_NAME" ]; then
-            RUN_NAME="grpo-run-${{ github.run_id }}"
+            RUN_NAME="run-${{ github.run_id }}"
           fi
 
           cat > kaggle_kernel/kernel-metadata.json << EOF
-          {
-            "id": "$KAGGLE_USERNAME/$KERNEL_SLUG",
-            "title": "TunRex GRPO Training - $RUN_NAME",
-            "code_file": "notebook.ipynb",
-            "language": "python",
-            "kernel_type": "notebook",
-            "is_private": true,
-            "enable_gpu": $ENABLE_GPU,
-            "enable_tpu": $ENABLE_TPU,
-            "enable_internet": true,
-            "dataset_sources": [],
-            "competition_sources": [],
-            "kernel_sources": [],
-            "model_sources": ["google/gemma/flax/gemma-3-1b-it"]
-          }
-          EOF
+{
+  "id": "$KAGGLE_USERNAME/$KERNEL_SLUG",
+  "title": "tunix-grpo-training",
+  "code_file": "notebook.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": $ENABLE_GPU,
+  "enable_tpu": $ENABLE_TPU,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": []
+}
+EOF
 
           echo "Kernel metadata:"
           cat kaggle_kernel/kernel-metadata.json
