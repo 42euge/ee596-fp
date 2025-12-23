@@ -23,6 +23,22 @@ from tunrex.models import (
     save_model_state,
 )
 
+# Reward comparison API
+from tunrex.reward_comparison import (
+    BaseReward,
+    RewardResult,
+    RewardMetadata,
+    ProgrammaticReward,
+    RubricReward,
+    RubricCriterion,
+    PreferenceModelReward,
+    RewardComparison,
+    ComparisonResult,
+    RewardAnalyzer,
+    CorrelationAnalysis,
+    AgreementAnalysis,
+)
+
 __all__ = [
     "__version__",
     # Datasets
@@ -40,4 +56,17 @@ __all__ = [
     "get_lora_model",
     "prepare_gemma_checkpoint",
     "save_model_state",
+    # Reward Comparison
+    "BaseReward",
+    "RewardResult",
+    "RewardMetadata",
+    "ProgrammaticReward",
+    "RubricReward",
+    "RubricCriterion",
+    "PreferenceModelReward",
+    "RewardComparison",
+    "ComparisonResult",
+    "RewardAnalyzer",
+    "CorrelationAnalysis",
+    "AgreementAnalysis",
 ]
