@@ -1,26 +1,24 @@
 [project]
 name = "tunix-hackathon-google"
 version = "0.1.0"
-description = "Add your description here"
+description = "GRPO training on TPU with Tunix"
 requires-python = ">=3.11"
 dependencies = [
-    "torch>=2.0.0",
     "transformers>=4.40.0",
-    "peft>=0.10.0",
-    "accelerate>=0.27.0",
     "safetensors>=0.4.0",
     "datasets>=2.18.0",
     "pandas>=2.0.0",
     "tqdm>=4.66.0",
     "huggingface_hub>=0.21.0",
+    "jax[tpu]==0.4.38",
+    "flax==0.12.2",
+    "optax==0.2.6",
+    "grain-nightly",
+    "wandb>=0.16.0",
+    "tensorflow",
+    "tensorflow_datasets",
+    "tunix",
 ]
 
-[project.optional-dependencies]
-quantization = ["bitsandbytes>=0.42.0"]
-tpu = [
-    "google-tunix",
-    "jax[tpu]>=0.4.0",
-    "flax>=0.12.0",
-    "optax>=0.2.0",
-    "grain>=0.2.0",
-]
+[tool.uv.sources]
+tunix = { path = "tunix", editable = true }

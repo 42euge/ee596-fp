@@ -141,7 +141,7 @@ jobs:
           fi
 
           # Create the training command
-          TRAIN_CMD="cd ~/training && source ~/venv/bin/activate && export HF_TOKEN='${HF_TOKEN}' && export WANDB_API_KEY='${WANDB_API_KEY}' && python scripts/train_grpo.py --num-steps $NUM_STEPS --model-id $MODEL_ID --learning-rate $LEARNING_RATE --batch-size $BATCH_SIZE --wandb-project tunix-grpo-ci $LORA_ARG $RUN_NAME_ARG"
+          TRAIN_CMD="cd ~/training && export HF_TOKEN='${HF_TOKEN}' && export WANDB_API_KEY='${WANDB_API_KEY}' && uv run python scripts/train_grpo.py --num-steps $NUM_STEPS --model-id $MODEL_ID --learning-rate $LEARNING_RATE --batch-size $BATCH_SIZE --wandb-project tunix-grpo-ci $LORA_ARG $RUN_NAME_ARG"
 
           gcloud compute tpus tpu-vm ssh $TPU_NAME \
             --project=$GCP_PROJECT \

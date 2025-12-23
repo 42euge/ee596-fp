@@ -122,7 +122,7 @@ jobs:
           gcloud compute tpus tpu-vm ssh $TPU_NAME \
             --project=$GCP_PROJECT \
             --zone=$TPU_ZONE \
-            --command="cd ~/training && source ~/venv/bin/activate && python scripts/train_small.py --num-steps $NUM_STEPS"
+            --command="cd ~/training && uv run python scripts/train_small.py --num-steps $NUM_STEPS"
 
       - name: Cleanup TPU VM
         if: always()
