@@ -15,22 +15,78 @@ This project fine-tunes Google's Gemma3-1B model using Group Relative Policy Opt
 - **Training Data**: OpenRubrics dataset with rubric-based reward signals
 - **Reward Functions**: Rubric-as-Reward (RaR) scoring + format compliance
 
+## 🚀 Automated Development Pipelines
+
+This project includes comprehensive automation for the entire reward model development lifecycle:
+
+- ✅ **One-command setup** with `make quickstart`
+- ✅ **Automated dataset preparation** with validation
+- ✅ **Training orchestration** on local or TPU with W&B tracking
+- ✅ **Automated evaluation** with comprehensive metrics
+- ✅ **One-click deployment** to HuggingFace Hub
+- ✅ **Real-time monitoring** with training dashboards
+- ✅ **CI/CD integration** with GitHub Actions
+- ✅ **Code quality checks** with pre-commit hooks
+
+**Quick Start:**
+```bash
+# Full setup (install dependencies, prepare dataset)
+make quickstart
+
+# Start training
+make train
+
+# Evaluate model
+make evaluate
+
+# Monitor training
+make monitor RUN=<run_name>
+
+# Deploy checkpoint
+make deploy CHECKPOINT=./checkpoints/step_1000 REPO_ID=username/model
+```
+
+**Documentation:**
+- 📖 [Complete Pipeline Guide](docs/PIPELINE_GUIDE.md) - Full documentation
+- 📋 [Quick Reference](docs/QUICK_REFERENCE.md) - Cheat sheet
+- 🔧 [CI/CD Setup](docs/CICD_SETUP.md) - GitHub Actions setup
+
 ## Repository Structure
 
 ```
 ├── README.md              # This file
+├── Makefile               # Development automation (make quickstart, make train, etc.)
 ├── requirements.txt       # Python dependencies
+├── .pre-commit-config.yaml # Code quality hooks
 ├── src/
 │   ├── __init__.py       # Package initialization
 │   ├── main.py           # Entry point for inference/evaluation
 │   ├── model.py          # Model loading and inference code
 │   ├── config.py         # Hyperparameters and configuration
 │   └── utils.py          # Helper functions (data loading, rewards, etc.)
+├── scripts/               # Automation pipelines
+│   ├── reward_pipeline.py    # Main CLI for all pipelines
+│   ├── prepare_dataset.py    # Dataset preparation automation
+│   ├── train_grpo.py         # GRPO training script
+│   ├── evaluate_model.py     # Model evaluation automation
+│   ├── deploy_checkpoint.py  # HuggingFace deployment automation
+│   ├── monitor_training.py   # Training metrics dashboard
+│   └── setup_tpu_vm.sh       # TPU environment setup
+├── TunRex/                # Dataset toolkit (git subtree)
+│   └── src/tunrex/datasets/  # Dataset loading, rewards, evaluation
+├── .github/workflows/     # CI/CD automation
+│   ├── auto-evaluation.yml      # Automated evaluation on PRs
+│   ├── tpu-training.yml         # Quick TPU validation
+│   └── tpu-training-full.yml    # Full TPU training
+├── docs/
+│   ├── PIPELINE_GUIDE.md  # Complete pipeline documentation
+│   ├── QUICK_REFERENCE.md # Quick reference cheat sheet
+│   └── CICD_SETUP.md      # GitHub Actions setup guide
 ├── demo/
 │   └── demo.py           # Interactive demo script
-├── data/                  # Dataset files (download separately)
-├── checkpoints/           # Saved model weights
-└── results/               # Generated outputs and evaluation results
+├── data/                  # Prepared datasets (generated)
+├── checkpoints/           # Saved model weights (generated)
+└── logs/                  # Training logs and evaluation results (generated)
 ```
 
 ## Setup Instructions

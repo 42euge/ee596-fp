@@ -1,0 +1,279 @@
+name: Automated Model Evaluation
+
+on:
+  # Run on pull requests
+  pull_request:
+    branches: [ main ]
+
+  # Run on push to specific branches
+  push:
+    branches: [ main, 'claude/**' ]
+
+  # Run on schedule (daily at midnight)
+  schedule:
+    - cron: '0 0 * * *'
+
+  # Allow manual trigger with parameters
+  workflow_dispatch:
+    inputs:
+      checkpoint_path:
+        description: 'Path to checkpoint (leave empty for base model)'
+        required: false
+        type: string
+      dataset:
+        description: 'Dataset to evaluate on'
+        required: false
+        default: 'gsm8k'
+        type: choice
+        options:
+          - gsm8k
+          - openrubrics
+      split:
+        description: 'Dataset split'
+        required: false
+        default: 'test'
+        type: choice
+        options:
+          - train
+          - val
+          - test
+      num_samples:
+        description: 'Number of samples (leave empty for all)'
+        required: false
+        type: string
+      upload_results:
+        description: 'Upload results to HuggingFace Hub'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e TunRex
+
+      - name: Prepare dataset
+        run: |
+          python scripts/prepare_dataset.py \
+            --config ${{ github.event.inputs.dataset || 'gsm8k' }} \
+            --output-dir data/${{ github.event.inputs.dataset || 'gsm8k' }} \
+            --validate
+
+      - name: Run evaluation (base model)
+        if: ${{ github.event.inputs.checkpoint_path == '' }}
+        run: |
+          python scripts/evaluate_model.py \
+            --dataset ${{ github.event.inputs.dataset || 'gsm8k' }} \
+            --split ${{ github.event.inputs.split || 'test' }} \
+            --output logs/eval_results_base_model.json \
+            --no-model \
+            ${{ github.event.inputs.num_samples && format('--num-samples {0}', github.event.inputs.num_samples) || '' }}
+
+      - name: Run evaluation (with checkpoint)
+        if: ${{ github.event.inputs.checkpoint_path != '' }}
+        run: |
+          python scripts/evaluate_model.py \
+            --checkpoint ${{ github.event.inputs.checkpoint_path }} \
+            --dataset ${{ github.event.inputs.dataset || 'gsm8k' }} \
+            --split ${{ github.event.inputs.split || 'test' }} \
+            --output logs/eval_results_checkpoint.json \
+            ${{ github.event.inputs.num_samples && format('--num-samples {0}', github.event.inputs.num_samples) || '' }}
+
+      - name: Generate evaluation report
+        run: |
+          echo "## Evaluation Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Display results from JSON
+          if [ -f logs/eval_results_base_model.json ]; then
+            RESULT_FILE="logs/eval_results_base_model.json"
+          else
+            RESULT_FILE="logs/eval_results_checkpoint.json"
+          fi
+
+          if [ -f "$RESULT_FILE" ]; then
+            echo "### Metrics" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo '```json' >> $GITHUB_STEP_SUMMARY
+            jq '.metrics' "$RESULT_FILE" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+
+            # Extract key metrics
+            EXACT_ACC=$(jq -r '.metrics.exact_accuracy' "$RESULT_FILE")
+            PARTIAL_ACC=$(jq -r '.metrics.partial_accuracy' "$RESULT_FILE")
+            FORMAT_COMP=$(jq -r '.metrics.format_compliance' "$RESULT_FILE")
+            TOTAL=$(jq -r '.metrics.total_examples' "$RESULT_FILE")
+
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+            echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+            echo "| Exact Accuracy | $(printf '%.2f%%' $(echo "$EXACT_ACC * 100" | bc)) |" >> $GITHUB_STEP_SUMMARY
+            echo "| Partial Accuracy | $(printf '%.2f%%' $(echo "$PARTIAL_ACC * 100" | bc)) |" >> $GITHUB_STEP_SUMMARY
+            echo "| Format Compliance | $(printf '%.2f%%' $(echo "$FORMAT_COMP * 100" | bc)) |" >> $GITHUB_STEP_SUMMARY
+            echo "| Total Examples | $TOTAL |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload results as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: evaluation-results-${{ github.run_id }}
+          path: |
+            logs/*.json
+            data/*/stats.json
+          retention-days: 30
+
+      - name: Upload results to HuggingFace Hub
+        if: ${{ github.event.inputs.upload_results == 'true' }}
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          pip install huggingface_hub
+
+          python - <<EOF
+          import json
+          import os
+          from huggingface_hub import HfApi, create_repo
+          from pathlib import Path
+
+          # Load results
+          result_files = list(Path('logs').glob('eval_results_*.json'))
+          if not result_files:
+              print("No results to upload")
+              exit(0)
+
+          result_file = result_files[0]
+          with open(result_file) as f:
+              results = json.load(f)
+
+          # Create/update results repo
+          repo_id = "your-username/reward-model-eval-results"  # TODO: Configure this
+
+          try:
+              api = HfApi()
+              create_repo(repo_id, repo_type="dataset", exist_ok=True)
+
+              # Upload results
+              api.upload_file(
+                  path_or_fileobj=str(result_file),
+                  path_in_repo=f"results/{result_file.name}",
+                  repo_id=repo_id,
+                  repo_type="dataset",
+              )
+
+              print(f"Uploaded results to https://huggingface.co/datasets/{repo_id}")
+
+          except Exception as e:
+              print(f"Failed to upload: {e}")
+              exit(1)
+          EOF
+
+      - name: Comment on PR with results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            // Find result file
+            let resultFile;
+            if (fs.existsSync('logs/eval_results_base_model.json')) {
+              resultFile = 'logs/eval_results_base_model.json';
+            } else if (fs.existsSync('logs/eval_results_checkpoint.json')) {
+              resultFile = 'logs/eval_results_checkpoint.json';
+            }
+
+            if (!resultFile) {
+              console.log('No results file found');
+              return;
+            }
+
+            const results = JSON.parse(fs.readFileSync(resultFile, 'utf8'));
+            const metrics = results.metrics;
+
+            const comment = `## 🤖 Automated Evaluation Results
+
+            **Dataset:** ${results.dataset} (${results.split} split)
+            **Checkpoint:** ${results.checkpoint}
+            **Examples:** ${metrics.total_examples}
+
+            ### Metrics
+
+            | Metric | Value | Count |
+            |--------|-------|-------|
+            | Exact Accuracy | ${(metrics.exact_accuracy * 100).toFixed(2)}% | ${metrics.exact_correct}/${metrics.total_examples} |
+            | Partial Accuracy | ${(metrics.partial_accuracy * 100).toFixed(2)}% | ${metrics.partial_correct}/${metrics.total_examples} |
+            | Numerical Accuracy | ${(metrics.numerical_accuracy * 100).toFixed(2)}% | ${metrics.numerical_correct}/${metrics.total_examples} |
+            | Format Compliance | ${(metrics.format_compliance * 100).toFixed(2)}% | ${metrics.format_correct}/${metrics.total_examples} |
+
+            <details>
+            <summary>View full results</summary>
+
+            \`\`\`json
+            ${JSON.stringify(metrics, null, 2)}
+            \`\`\`
+
+            </details>
+            `;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+  # Benchmark comparison job
+  benchmark:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Run benchmark suite
+        run: |
+          pip install -r requirements.txt
+          pip install -e TunRex
+
+          # Run on multiple datasets
+          for dataset in gsm8k openrubrics; do
+            echo "Benchmarking on $dataset..."
+
+            python scripts/evaluate_model.py \
+              --dataset $dataset \
+              --split test \
+              --output logs/benchmark_${dataset}.json \
+              --no-model \
+              --num-samples 100
+          done
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-${{ github.run_id }}
+          path: logs/benchmark_*.json
+          retention-days: 90
