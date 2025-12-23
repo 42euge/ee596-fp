@@ -86,6 +86,55 @@ class InferenceConfig:
 
 
 @dataclass
+class MonitoringConfig:
+    """Configuration for reward hack detection and behavior monitoring."""
+    enabled: bool = True  # Enable/disable monitoring
+
+    # Statistical anomaly detection
+    reward_zscore_threshold: float = 3.0
+    reward_variance_threshold: float = 5.0
+    min_samples_for_detection: int = 10
+
+    # Response length monitoring
+    min_response_length: int = 10
+    max_response_length: int = 2048
+    length_outlier_threshold: float = 3.0
+
+    # Repetition detection
+    max_ngram_repetition_ratio: float = 0.3
+    ngram_size: int = 3
+    max_token_repetition_ratio: float = 0.5
+
+    # Format gaming detection
+    min_reasoning_length: int = 20
+    format_quality_ratio_threshold: float = 0.3
+
+    # Diversity monitoring
+    min_unique_responses_ratio: float = 0.5
+    similarity_threshold: float = 0.9
+
+    # KL divergence monitoring
+    kl_divergence_min: float = 0.001
+    kl_divergence_max: float = 5.0
+
+    # Gradient monitoring
+    gradient_norm_max: float = 10.0
+    gradient_norm_min: float = 1e-6
+
+    # Reward component balance
+    max_component_imbalance: float = 0.9
+
+    # Moving average window sizes
+    short_window_size: int = 20
+    long_window_size: int = 100
+
+    # Logging configuration
+    log_detections_to_wandb: bool = True
+    log_detections_to_console: bool = True
+    detection_log_interval: int = 1  # Log every N steps
+
+
+@dataclass
 class Config:
     """Master configuration combining all sub-configs."""
     lora: LoRAConfig = field(default_factory=LoRAConfig)
@@ -93,6 +142,7 @@ class Config:
     training: TrainingConfig = field(default_factory=TrainingConfig)
     data: DataConfig = field(default_factory=DataConfig)
     inference: InferenceConfig = field(default_factory=InferenceConfig)
+    monitoring: MonitoringConfig = field(default_factory=MonitoringConfig)
 
     # Paths
     checkpoint_dir: str = "./checkpoints"
