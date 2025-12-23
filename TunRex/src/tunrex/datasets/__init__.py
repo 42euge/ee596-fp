@@ -40,6 +40,24 @@ from tunrex.datasets.evaluate import (
     generate,
     evaluate,
 )
+from tunrex.datasets.reward_quality import (
+    RewardQualityAssessor,
+    QualityMetrics,
+    PathologyAlert,
+    RewardStats,
+)
+from tunrex.datasets.reward_monitor import (
+    RewardQualityMonitor,
+    InterventionConfig,
+    RewardQualityDashboard,
+    create_default_monitor,
+)
+from tunrex.datasets.reward_wrapper import (
+    MonitoredRewardFunction,
+    RewardFunctionRegistry,
+    create_monitored_reward_functions,
+    batch_compute_rewards,
+)
 
 __all__ = [
     # Core classes
@@ -78,4 +96,17 @@ __all__ = [
     # Evaluate
     "generate",
     "evaluate",
+    # Reward Quality Assessment
+    "RewardQualityAssessor",
+    "QualityMetrics",
+    "PathologyAlert",
+    "RewardStats",
+    "RewardQualityMonitor",
+    "InterventionConfig",
+    "RewardQualityDashboard",
+    "create_default_monitor",
+    "MonitoredRewardFunction",
+    "RewardFunctionRegistry",
+    "create_monitored_reward_functions",
+    "batch_compute_rewards",
 ]
