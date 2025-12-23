@@ -100,6 +100,27 @@ jobs:
             --zone=$TPU_ZONE \
             --command="cd ~/training && bash scripts/setup_tpu_vm.sh"
 
+      - name: Validate HuggingFace Token
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          if [ -z "$HF_TOKEN" ]; then
+            echo "ERROR: HF_TOKEN secret is not set!"
+            echo "Please add your HuggingFace token as a GitHub secret:"
+            echo "1. Go to Settings > Secrets and variables > Actions"
+            echo "2. Add a new repository secret named 'HF_TOKEN'"
+            echo "3. Get your token from: https://huggingface.co/settings/tokens"
+            exit 1
+          fi
+
+          # Validate token format (should start with 'hf_')
+          if [[ ! "$HF_TOKEN" =~ ^hf_ ]]; then
+            echo "WARNING: HF_TOKEN doesn't start with 'hf_' - this may not be a valid HuggingFace token"
+            echo "Expected format: hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+          fi
+
+          echo "HF_TOKEN validation passed"
+
       - name: Configure HuggingFace auth
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
@@ -116,6 +137,12 @@ jobs:
             --project=$GCP_PROJECT \
             --zone=$TPU_ZONE \
             --command="mkdir -p ~/.cache/huggingface && mv ~/hf_token.txt ~/.cache/huggingface/token"
+
+          # Verify token was written correctly
+          gcloud compute tpus tpu-vm ssh $TPU_NAME \
+            --project=$GCP_PROJECT \
+            --zone=$TPU_ZONE \
+            --command="if [ -f ~/.cache/huggingface/token ]; then echo 'HF token file created successfully'; else echo 'ERROR: Failed to create HF token file' && exit 1; fi"
 
       - name: Run training
         run: |

@@ -12,6 +12,12 @@ import os
 from pathlib import Path
 from typing import Optional
 
+try:
+    from tqdm import tqdm
+    HAS_TQDM = True
+except ImportError:
+    HAS_TQDM = False
+
 from .config import Config, get_default_config, format_prompt, get_system_prompt
 from .model import GemmaModel, load_model, get_device
 from .utils import (
@@ -19,6 +25,9 @@ from .utils import (
     evaluate_accuracy,
     extract_reasoning_and_answer,
 )
+from .logger import get_logger
+
+logger = get_logger(__name__)
 
 
 def run_inference(
@@ -37,7 +46,7 @@ def run_inference(
         questions: List of questions (for batch mode)
         output_file: Output file path
     """
-    print("Loading model...")
+    logger.info("Loading model for inference...")
     model = load_model(checkpoint_path=checkpoint_path, device=device)
 
     results = []
@@ -81,8 +90,15 @@ def run_inference(
     else:
         # Batch mode
         if questions:
-            for i, question in enumerate(questions):
-                print(f"\nProcessing question {i+1}/{len(questions)}...")
+            logger.info(f"Processing {len(questions)} questions in batch mode")
+
+            # Use tqdm progress bar if available
+            iterator = tqdm(questions, desc="Processing questions") if HAS_TQDM else questions
+
+            for i, question in enumerate(iterator):
+                if not HAS_TQDM:
+                    logger.info(f"Processing question {i+1}/{len(questions)}")
+
                 result = model.solve(question, temperature=0.7)
                 results.append({
                     "question": question,
@@ -90,7 +106,9 @@ def run_inference(
                     "reasoning": result["reasoning"],
                     "answer": result["answer"],
                 })
-                print(f"  Answer: {result['answer']}")
+
+                if not HAS_TQDM:
+                    logger.info(f"  Answer: {result['answer']}")
 
     # Save results
     if output_file and results:
@@ -98,7 +116,7 @@ def run_inference(
         output_path.parent.mkdir(parents=True, exist_ok=True)
         with open(output_path, "w") as f:
             json.dump(results, f, indent=2)
-        print(f"\nResults saved to: {output_file}")
+        logger.info(f"Results saved to: {output_file}")
 
     return results
 
@@ -109,6 +127,7 @@ def run_evaluation(
     data_dir: str = "./data",
     num_samples: int = 100,
     output_file: Optional[str] = None,
+    batch_size: int = 8,
 ):
     """Evaluate model on GSM8K test set.
 
@@ -118,11 +137,12 @@ def run_evaluation(
         data_dir: Directory containing data
         num_samples: Number of samples to evaluate
         output_file: Output file for detailed results
+        batch_size: Batch size for evaluation (higher = faster but more memory)
     """
-    print("Loading model...")
+    logger.info("Loading model for evaluation...")
     model = load_model(checkpoint_path=checkpoint_path, device=device)
 
-    print(f"\nLoading test data from {data_dir}...")
+    logger.info(f"Loading test data from {data_dir}...")
     try:
         test_data = load_gsm8k_dataset(
             data_dir=data_dir,
@@ -130,48 +150,75 @@ def run_evaluation(
             max_examples=num_samples,
         )
     except FileNotFoundError as e:
-        print(f"Error: {e}")
-        print("\nPlease download the GSM8K dataset first.")
+        logger.error(f"Dataset not found: {e}")
+        logger.info("Please download the GSM8K dataset first.")
         return
 
-    print(f"Evaluating on {len(test_data)} examples...")
+    logger.info(f"Evaluating on {len(test_data)} examples with batch_size={batch_size}")
 
     predictions = []
     ground_truths = []
     detailed_results = []
 
-    for i, item in enumerate(test_data):
-        if (i + 1) % 10 == 0:
-            print(f"  Progress: {i+1}/{len(test_data)}")
+    # Process in batches for better performance
+    for batch_start in range(0, len(test_data), batch_size):
+        batch_end = min(batch_start + batch_size, len(test_data))
+        batch = test_data[batch_start:batch_end]
 
-        result = model.solve(
-            item["question"],
+        # Prepare batch of prompts
+        from .config import format_prompt, get_system_prompt
+        prompts = [
+            format_prompt(item["question"], system_prompt=get_system_prompt(2))
+            for item in batch
+        ]
+
+        # Use progress bar if available
+        if HAS_TQDM and batch_start == 0:
+            # Initialize progress bar on first batch
+            pbar = tqdm(total=len(test_data), desc="Evaluating")
+
+        # Batch generation
+        responses = model.generate_batch(
+            prompts,
             temperature=1e-4,  # Greedy decoding for evaluation
             do_sample=False,
         )
 
-        predictions.append(result["response"])
-        ground_truths.append(item["answer"])
+        # Process batch results
+        for i, (item, response) in enumerate(zip(batch, responses)):
+            reasoning, answer = extract_reasoning_and_answer(response)
 
-        detailed_results.append({
-            "question": item["question"],
-            "ground_truth": item["answer"],
-            "prediction": result["answer"],
-            "reasoning": result["reasoning"],
-            "full_response": result["response"],
-        })
+            predictions.append(response)
+            ground_truths.append(item["answer"])
+
+            detailed_results.append({
+                "question": item["question"],
+                "ground_truth": item["answer"],
+                "prediction": answer,
+                "reasoning": reasoning,
+                "full_response": response,
+            })
+
+        # Update progress
+        if HAS_TQDM:
+            pbar.update(len(batch))
+        else:
+            logger.info(f"Progress: {batch_end}/{len(test_data)}")
+
+    if HAS_TQDM:
+        pbar.close()
 
     # Calculate metrics
     metrics = evaluate_accuracy(predictions, ground_truths)
 
-    print("\n" + "=" * 60)
-    print("EVALUATION RESULTS")
-    print("=" * 60)
-    print(f"Total samples:      {metrics['total']}")
-    print(f"Correct:            {metrics['correct']} ({metrics['accuracy']:.2f}%)")
-    print(f"Partial correct:    {metrics['partial_accuracy']:.2f}%")
-    print(f"Format correct:     {metrics['format_accuracy']:.2f}%")
-    print("=" * 60)
+    logger.info("\n" + "=" * 60)
+    logger.info("EVALUATION RESULTS")
+    logger.info("=" * 60)
+    logger.info(f"Total samples:      {metrics['total']}")
+    logger.info(f"Correct:            {metrics['correct']} ({metrics['accuracy']:.2f}%)")
+    logger.info(f"Partial correct:    {metrics['partial_accuracy']:.2f}%")
+    logger.info(f"Format correct:     {metrics['format_accuracy']:.2f}%")
+    logger.info("=" * 60)
 
     # Save detailed results
     if output_file:
@@ -183,7 +230,7 @@ def run_evaluation(
                 "metrics": metrics,
                 "results": detailed_results,
             }, f, indent=2)
-        print(f"\nDetailed results saved to: {output_file}")
+        logger.info(f"Detailed results saved to: {output_file}")
 
     return metrics
 
@@ -245,6 +292,13 @@ def main():
         help="Questions to answer (batch mode)",
     )
 
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=8,
+        help="Batch size for evaluation (higher = faster but more memory)",
+    )
+
     args = parser.parse_args()
 
     if args.mode == "inference":
@@ -263,6 +317,7 @@ def main():
             data_dir=args.data_dir,
             num_samples=args.num_samples,
             output_file=args.output,
+            batch_size=args.batch_size,
         )
 
 

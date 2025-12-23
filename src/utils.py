@@ -22,6 +22,36 @@ from .config import (
     REASONING_START, REASONING_END, SOLUTION_START, SOLUTION_END,
     format_prompt, get_system_prompt
 )
+from .logger import get_logger
+
+logger = get_logger(__name__)
+
+
+# =============================================================================
+# Pre-compiled Regex Patterns for Performance
+# =============================================================================
+
+# Compile regex patterns once at module load time for better performance
+_REASONING_PATTERN = re.compile(
+    rf"{re.escape(REASONING_START)}(.*?){re.escape(REASONING_END)}",
+    flags=re.DOTALL | re.MULTILINE
+)
+
+_ANSWER_PATTERN = re.compile(
+    rf"{re.escape(SOLUTION_START)}(.*?){re.escape(SOLUTION_END)}",
+    flags=re.DOTALL | re.MULTILINE
+)
+
+# Numerical answer extraction patterns (ordered by priority)
+_NUMERICAL_PATTERNS = [
+    re.compile(r"(?:the answer is|answer:|final answer:?)\s*([\d,.-]+)", re.IGNORECASE | re.MULTILINE),
+    re.compile(r"(?:=|equals)\s*([\d,.-]+)\s*$", re.IGNORECASE | re.MULTILINE),
+    re.compile(rf"{re.escape(SOLUTION_START)}\s*([\d,.-]+)\s*{re.escape(SOLUTION_END)}", re.IGNORECASE | re.MULTILINE),
+    re.compile(r"([\d,.-]+)\s*$", re.IGNORECASE | re.MULTILINE),
+]
+
+# Pattern for counting numbers in text
+_NUMBERS_PATTERN = re.compile(r'\d+')
 
 
 # =============================================================================
@@ -31,22 +61,16 @@ from .config import (
 def extract_reasoning_and_answer(completion: str) -> Tuple[str, str]:
     """Extract reasoning and answer sections from a completion.
 
+    Uses pre-compiled regex patterns for better performance.
+
     Args:
         completion: The model's full response
 
     Returns:
         Tuple of (reasoning, answer) strings
     """
-    reasoning_match = re.search(
-        rf"{REASONING_START}(.*?){REASONING_END}",
-        completion,
-        flags=re.DOTALL | re.MULTILINE
-    )
-    answer_match = re.search(
-        rf"{SOLUTION_START}(.*?){SOLUTION_END}",
-        completion,
-        flags=re.DOTALL | re.MULTILINE
-    )
+    reasoning_match = _REASONING_PATTERN.search(completion)
+    answer_match = _ANSWER_PATTERN.search(completion)
 
     reasoning = reasoning_match.group(1).strip() if reasoning_match else ""
     answer = answer_match.group(1).strip() if answer_match else ""
@@ -57,7 +81,8 @@ def extract_reasoning_and_answer(completion: str) -> Tuple[str, str]:
 def extract_numerical_answer(text: str) -> Optional[str]:
     """Extract a numerical answer from text.
 
-    Tries multiple patterns to find numbers in various formats.
+    Tries multiple pre-compiled patterns to find numbers in various formats.
+    Patterns are tried in order of priority.
 
     Args:
         text: Text to search for numbers
@@ -65,19 +90,11 @@ def extract_numerical_answer(text: str) -> Optional[str]:
     Returns:
         Extracted number as string, or None if not found
     """
-    patterns = [
-        # Common answer patterns
-        r"(?:the answer is|answer:|final answer:?)\s*([\d,.-]+)",
-        r"(?:=|equals)\s*([\d,.-]+)\s*$",
-        # XML-style answer tags
-        rf"{SOLUTION_START}\s*([\d,.-]+)\s*{SOLUTION_END}",
-        # Last number in text (fallback)
-        r"([\d,.-]+)\s*$",
-    ]
-
     text_lower = text.lower()
-    for pattern in patterns:
-        match = re.search(pattern, text_lower, re.IGNORECASE | re.MULTILINE)
+
+    # Try each pre-compiled pattern in order
+    for pattern in _NUMERICAL_PATTERNS:
+        match = pattern.search(text_lower)
         if match:
             # Clean up the number (remove commas)
             num_str = match.group(1).replace(",", "")
@@ -110,34 +127,68 @@ def load_gsm8k_dataset(
 
     Returns:
         List of dictionaries with 'question', 'answer', 'source' keys
+
+    Raises:
+        FileNotFoundError: If the dataset file doesn't exist
+        ValueError: If the CSV format is invalid
     """
     csv_path = os.path.join(data_dir, f"main_{split}.csv")
 
     if not os.path.exists(csv_path):
-        raise FileNotFoundError(
+        error_msg = (
             f"GSM8K dataset not found at {csv_path}. "
             "Please download from Kaggle: thedevastator/grade-school-math-8k-q-a"
         )
+        logger.error(error_msg)
+        raise FileNotFoundError(error_msg)
+
+    logger.info(f"Loading GSM8K {split} dataset from {csv_path}")
 
     data = []
-    with open(csv_path, newline="", encoding="utf-8") as csvfile:
-        reader = csv.DictReader(csvfile)
-        for row in reader:
-            answer = row["answer"]
-            # Extract numerical answer after ####
-            if "####" in answer:
-                answer = answer.split("####")[1].strip()
+    try:
+        with open(csv_path, newline="", encoding="utf-8") as csvfile:
+            reader = csv.DictReader(csvfile)
 
-            data.append({
-                "question": row["question"],
-                "answer": answer,
-                "source": "gsm8k",
-            })
+            # Validate expected columns exist
+            required_columns = {"question", "answer"}
+            if reader.fieldnames is None:
+                raise ValueError("CSV file appears to be empty or invalid")
+
+            missing_columns = required_columns - set(reader.fieldnames)
+            if missing_columns:
+                raise ValueError(
+                    f"CSV missing required columns: {missing_columns}. "
+                    f"Found columns: {reader.fieldnames}"
+                )
+
+            for i, row in enumerate(reader):
+                try:
+                    answer = row["answer"]
+                    # Extract numerical answer after #### delimiter
+                    # GSM8K format: "reasoning text #### numerical_answer"
+                    if "####" in answer:
+                        answer = answer.split("####")[1].strip()
+
+                    data.append({
+                        "question": row["question"],
+                        "answer": answer,
+                        "source": "gsm8k",
+                    })
+                except KeyError as e:
+                    logger.warning(f"Skipping row {i} due to missing field: {e}")
+                    continue
+
+    except Exception as e:
+        logger.error(f"Error loading GSM8K dataset: {e}")
+        raise
+
+    logger.info(f"Loaded {len(data)} examples from GSM8K {split} set")
 
     # Sample if max_examples specified
     if max_examples and len(data) > max_examples:
         random.seed(seed)
         data = random.sample(data, max_examples)
+        logger.info(f"Sampled {len(data)} examples (seed={seed})")
 
     return data
 
@@ -156,16 +207,27 @@ def load_openrubrics_dataset(
 
     Returns:
         List of dictionaries with question, rubric, response data
+
+    Raises:
+        ImportError: If datasets library is not installed
     """
     try:
         from datasets import load_dataset
-    except ImportError:
-        raise ImportError("Please install datasets: pip install datasets")
+    except ImportError as e:
+        error_msg = (
+            "The 'datasets' library is required to load OpenRubrics. "
+            "Install it with: pip install datasets"
+        )
+        logger.error(error_msg)
+        raise ImportError(error_msg) from e
+
+    logger.info(f"Loading OpenRubrics {split} dataset from HuggingFace")
 
     try:
         raw_ds = load_dataset("OpenRubrics/OpenRubrics", split=split)
     except Exception as e:
-        print(f"Warning: Could not load OpenRubrics: {e}")
+        logger.error(f"Failed to load OpenRubrics dataset: {e}")
+        logger.warning("Returning empty dataset")
         return []
 
     columns = list(raw_ds.column_names)
@@ -425,8 +487,8 @@ def detect_question_type(prompt: str) -> str:
         matches = sum(1 for kw in kw_list if kw in prompt_lower)
         scores[qtype] = matches / len(kw_list)
 
-    # Boost math score for numeric content
-    numbers = len(re.findall(r'\d+', prompt))
+    # Boost math score for numeric content (using pre-compiled pattern)
+    numbers = len(_NUMBERS_PATTERN.findall(prompt))
     scores["math"] += min(numbers * 0.05, 0.3)
 
     max_score = max(scores.values())

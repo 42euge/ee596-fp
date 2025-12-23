@@ -143,6 +143,83 @@ def get_default_config() -> Config:
     return Config()
 
 
+def get_preset_config(preset: str = "standard") -> Config:
+    """Get a preset configuration optimized for different use cases.
+
+    Available presets:
+    - "quick": Fast training/inference for testing (lower quality)
+    - "standard": Balanced configuration (default)
+    - "production": High-quality training (slower but better results)
+
+    Args:
+        preset: Preset name ("quick", "standard", or "production")
+
+    Returns:
+        Config object with preset values
+
+    Raises:
+        ValueError: If preset name is invalid
+    """
+    if preset == "quick":
+        # Quick testing configuration
+        return Config(
+            lora=LoRAConfig(rank=32, alpha=32.0),
+            grpo=GRPOConfig(
+                max_prompt_length=128,
+                total_generation_steps=256,
+                temperature=0.9,
+                num_generations=2,
+                num_iterations=1,
+            ),
+            training=TrainingConfig(
+                train_micro_batch_size=4,
+                num_batches=100,
+                num_test_batches=20,
+                eval_every_n_steps=20,
+                learning_rate=5e-6,
+                save_interval_steps=100,
+            ),
+            data=DataConfig(
+                openrubrics_max_examples=500,
+            ),
+        )
+
+    elif preset == "standard":
+        # Standard balanced configuration (default)
+        return Config()
+
+    elif preset == "production":
+        # High-quality production configuration
+        return Config(
+            lora=LoRAConfig(rank=128, alpha=128.0),
+            grpo=GRPOConfig(
+                max_prompt_length=512,
+                total_generation_steps=1024,
+                temperature=0.9,
+                num_generations=4,
+                num_iterations=2,
+            ),
+            training=TrainingConfig(
+                train_micro_batch_size=1,
+                num_batches=5000,
+                num_test_batches=500,
+                eval_every_n_steps=50,
+                learning_rate=1e-6,
+                save_interval_steps=250,
+                max_checkpoints_to_keep=10,
+            ),
+            data=DataConfig(
+                openrubrics_max_examples=10000,
+            ),
+        )
+
+    else:
+        raise ValueError(
+            f"Invalid preset '{preset}'. "
+            "Choose from: 'quick', 'standard', 'production'"
+        )
+
+
 def get_system_prompt(version: int = 2) -> str:
     """Get system prompt by version number."""
     return SYSTEM_PROMPTS.get(version, SYSTEM_PROMPTS[2])

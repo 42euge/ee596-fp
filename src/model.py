@@ -26,6 +26,9 @@ from .config import (
     Config, get_default_config, format_prompt, get_system_prompt,
     REASONING_START, REASONING_END, SOLUTION_START, SOLUTION_END
 )
+from .logger import get_logger
+
+logger = get_logger(__name__)
 
 
 def get_device(preferred: str = "auto") -> str:
@@ -41,10 +44,18 @@ def get_device(preferred: str = "auto") -> str:
         return preferred
 
     if torch.cuda.is_available():
-        return "cuda"
+        device = "cuda"
+        logger.info(f"Using CUDA device: {torch.cuda.get_device_name(0)}")
+        return device
     elif torch.backends.mps.is_available():
+        logger.info("Using Apple MPS (Metal Performance Shaders) device")
         return "mps"
     else:
+        logger.warning(
+            "No GPU detected. Falling back to CPU. "
+            "Inference will be significantly slower. "
+            "Consider using a GPU for better performance."
+        )
         return "cpu"
 
 
@@ -86,9 +97,12 @@ class GemmaModel:
         2. Login with: huggingface-cli login
         """
         if self._loaded:
+            logger.debug("Model already loaded, skipping reload")
             return
 
-        print(f"Loading Gemma3-1B on device: {self.device}")
+        logger.info(f"Loading Gemma3-1B model on device: {self.device}")
+        if self.checkpoint_path:
+            logger.info(f"Will load LoRA checkpoint from: {self.checkpoint_path}")
 
         # Configure quantization if requested
         quantization_config = None
@@ -103,61 +117,93 @@ class GemmaModel:
             quantization_config = BitsAndBytesConfig(load_in_8bit=True)
 
         # Load tokenizer
+        logger.debug(f"Loading tokenizer from {self.BASE_MODEL_ID}")
         try:
-            self.tokenizer = AutoTokenizer.from_pretrained(self.BASE_MODEL_ID)
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                self.BASE_MODEL_ID,
+                token=True,  # Use HF_TOKEN from environment if available
+            )
         except OSError as e:
             if "gated repo" in str(e).lower() or "401" in str(e):
-                raise RuntimeError(
-                    "Gemma is a gated model. To access it:\n"
+                error_msg = (
+                    "Gemma is a gated model on HuggingFace. To access it:\n"
                     "1. Visit https://huggingface.co/google/gemma-3-1b-it\n"
-                    "2. Accept the license agreement\n"
-                    "3. Run: huggingface-cli login\n"
-                    "4. Enter your HuggingFace token"
-                ) from e
+                    "2. Accept the license agreement (requires HuggingFace account)\n"
+                    "3. Create an access token at https://huggingface.co/settings/tokens\n"
+                    "4. Login using one of these methods:\n"
+                    "   - Run: huggingface-cli login\n"
+                    "   - Set environment variable: export HF_TOKEN=your_token_here\n"
+                )
+                logger.error(error_msg)
+                raise RuntimeError(error_msg) from e
+            logger.error(f"Failed to load tokenizer: {e}")
             raise
+
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
+            logger.debug("Set pad_token to eos_token")
 
         # Load base model
+        logger.debug("Configuring model loading parameters")
         model_kwargs = {
             "torch_dtype": torch.float16 if self.device != "cpu" else torch.float32,
             "device_map": "auto" if self.device == "cuda" else None,
             "trust_remote_code": True,
+            "token": True,  # Use HF_TOKEN from environment if available
         }
 
         if quantization_config and self.device == "cuda":
             model_kwargs["quantization_config"] = quantization_config
+            logger.info(f"Using quantization: {self.load_in_4bit and '4-bit' or '8-bit'}")
         elif self.device == "mps":
             # MPS doesn't support quantization, use float16
             model_kwargs["torch_dtype"] = torch.float16
 
         # Try using specific Gemma3 class first, fall back to Auto
-        if HAS_GEMMA3_CLASS:
-            self.model = Gemma3ForCausalLM.from_pretrained(
-                self.BASE_MODEL_ID,
-                **model_kwargs
-            )
-        else:
-            self.model = AutoModelForCausalLM.from_pretrained(
-                self.BASE_MODEL_ID,
-                **model_kwargs
-            )
+        logger.info("Loading base model (this may take a few minutes)...")
+        try:
+            if HAS_GEMMA3_CLASS:
+                logger.debug("Using Gemma3ForCausalLM class")
+                self.model = Gemma3ForCausalLM.from_pretrained(
+                    self.BASE_MODEL_ID,
+                    **model_kwargs
+                )
+            else:
+                logger.debug("Using AutoModelForCausalLM class")
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    self.BASE_MODEL_ID,
+                    **model_kwargs
+                )
+        except Exception as e:
+            logger.error(f"Failed to load base model: {e}")
+            raise
 
         # Load LoRA weights if checkpoint provided
-        if self.checkpoint_path and os.path.exists(self.checkpoint_path):
-            print(f"Loading LoRA weights from: {self.checkpoint_path}")
-            self.model = PeftModel.from_pretrained(
-                self.model,
-                self.checkpoint_path,
-            )
+        if self.checkpoint_path:
+            if os.path.exists(self.checkpoint_path):
+                logger.info(f"Loading LoRA weights from: {self.checkpoint_path}")
+                try:
+                    self.model = PeftModel.from_pretrained(
+                        self.model,
+                        self.checkpoint_path,
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to load LoRA checkpoint: {e}")
+                    raise
+            else:
+                logger.warning(
+                    f"Checkpoint path does not exist: {self.checkpoint_path}. "
+                    "Using base model without fine-tuned weights."
+                )
 
         # Move to device if not using device_map="auto"
         if self.device != "cuda" and hasattr(self.model, "to"):
+            logger.debug(f"Moving model to {self.device}")
             self.model = self.model.to(self.device)
 
         self.model.eval()
         self._loaded = True
-        print("Model loaded successfully!")
+        logger.info("Model loaded successfully!")
 
     def generate(
         self,
@@ -197,6 +243,7 @@ class GemmaModel:
                 do_sample=do_sample,
                 pad_token_id=self.tokenizer.pad_token_id,
                 eos_token_id=self.tokenizer.eos_token_id,
+                use_cache=True,  # Enable KV cache for faster generation
             )
 
         # Decode only the generated part (exclude input)
@@ -231,13 +278,29 @@ class GemmaModel:
         if not self._loaded:
             self.load()
 
+        # Calculate dynamic max_length based on actual prompt lengths
+        # This avoids unnecessary padding for short prompts
+        tokenized_lengths = [
+            len(self.tokenizer.encode(prompt, add_special_tokens=True))
+            for prompt in prompts
+        ]
+        max_input_length = max(tokenized_lengths)
+        # Add some buffer (128 tokens) but avoid excessive padding
+        dynamic_max_length = min(max_input_length + 128, 2048)
+
+        logger.debug(
+            f"Batch size: {len(prompts)}, "
+            f"max input length: {max_input_length}, "
+            f"dynamic max_length: {dynamic_max_length}"
+        )
+
         # Tokenize with padding
         inputs = self.tokenizer(
             prompts,
             return_tensors="pt",
             padding=True,
             truncation=True,
-            max_length=512,
+            max_length=dynamic_max_length,
         )
         inputs = {k: v.to(self.device) for k, v in inputs.items()}
 
@@ -251,6 +314,7 @@ class GemmaModel:
                 do_sample=do_sample,
                 pad_token_id=self.tokenizer.pad_token_id,
                 eos_token_id=self.tokenizer.eos_token_id,
+                use_cache=True,  # Enable KV cache for faster generation
             )
 
         responses = []
