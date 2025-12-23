@@ -150,8 +150,18 @@ jobs:
         id: push-kernel
         run: |
           cd kaggle_kernel
+          echo "=== Kernel metadata ==="
           cat kernel-metadata.json
-          kaggle kernels push
+          echo ""
+          echo "=== Notebook size ==="
+          ls -lh notebook.ipynb
+          echo ""
+          echo "=== Pushing to Kaggle ==="
+          kaggle kernels push -p . 2>&1 || {
+            echo "Push failed. Trying with verbose output..."
+            kaggle kernels push -p . -v 2>&1 || true
+            exit 1
+          }
           echo "Kernel pushed successfully!"
           echo "kernel_id=$KAGGLE_USERNAME/$KERNEL_SLUG" >> $GITHUB_OUTPUT
 
