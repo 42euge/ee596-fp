@@ -3,26 +3,14 @@ name: Colab Training Setup
 on:
   workflow_dispatch:
     inputs:
-      num_steps:
-        description: 'Number of training steps'
-        default: '100'
-        type: string
-      learning_rate:
-        description: 'Learning rate'
-        default: '3e-6'
-        type: string
-      run_name:
-        description: 'Run name for tracking'
-        default: ''
-        type: string
       notebook:
         description: 'Notebook to use'
-        default: 'grpo_gemma_tunrex_gdrive_save'
+        default: 'colab_train'
         type: choice
         options:
+          - colab_train
           - grpo_gemma_tunrex_gdrive_save
           - grpo_gemma_tunrex
-          - train_colab
 
 jobs:
   prepare-colab:
@@ -32,150 +20,25 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Prepare Colab notebook
-        id: prepare
-        run: |
-          # Determine notebook path
-          NOTEBOOK="${{ github.event.inputs.notebook }}"
-          if [ "$NOTEBOOK" = "train_colab" ]; then
-            NOTEBOOK_PATH="demo/train_colab.ipynb"
-          else
-            NOTEBOOK_PATH="notebooks/${NOTEBOOK}.ipynb"
-          fi
-
-          echo "Using notebook: $NOTEBOOK_PATH"
-
-          # Create output directory
-          mkdir -p colab_ready
-
-          # Use Python to inject CI parameters
-          python << 'EOF'
-          import json
-          import os
-
-          notebook_path = os.environ.get('NOTEBOOK_PATH', 'notebooks/grpo_gemma_tunrex_gdrive_save.ipynb')
-          num_steps = "${{ github.event.inputs.num_steps }}"
-          learning_rate = "${{ github.event.inputs.learning_rate }}"
-          run_name = "${{ github.event.inputs.run_name }}" or "colab-run-${{ github.run_id }}"
-
-          with open(notebook_path, 'r') as f:
-              nb = json.load(f)
-
-          # Create CI setup cell
-          ci_cell = {
-              "cell_type": "code",
-              "execution_count": None,
-              "metadata": {},
-              "outputs": [],
-              "source": [
-                  "# ===========================================\n",
-                  "# CI/CD Pre-configured Parameters\n",
-                  "# ===========================================\n",
-                  "import os\n",
-                  "\n",
-                  "# Training configuration from GitHub Actions\n",
-                  f"CI_NUM_STEPS = {num_steps}\n",
-                  f"CI_LEARNING_RATE = {learning_rate}\n",
-                  f"CI_RUN_NAME = '{run_name}'\n",
-                  "\n",
-                  "# Override notebook defaults if CI values are set\n",
-                  "if CI_NUM_STEPS:\n",
-                  "    NUM_BATCHES = CI_NUM_STEPS\n",
-                  "    MAX_STEPS = CI_NUM_STEPS\n",
-                  "    print(f'Using CI NUM_STEPS: {CI_NUM_STEPS}')\n",
-                  "\n",
-                  "if CI_LEARNING_RATE:\n",
-                  "    LEARNING_RATE = CI_LEARNING_RATE\n",
-                  "    print(f'Using CI LEARNING_RATE: {CI_LEARNING_RATE}')\n",
-                  "\n",
-                  "if CI_RUN_NAME:\n",
-                  "    VERSION = CI_RUN_NAME\n",
-                  "    print(f'Using CI RUN_NAME: {CI_RUN_NAME}')\n",
-                  "\n",
-                  "print('CI parameters loaded!')\n"
-              ]
-          }
-
-          # Find the right place to insert (after imports/installs)
-          insert_idx = 0
-          for i, cell in enumerate(nb['cells']):
-              if cell['cell_type'] == 'code':
-                  source = ''.join(cell.get('source', []))
-                  if 'pip install' in source or 'import' in source:
-                      insert_idx = i + 1
-                  else:
-                      break
-
-          # Insert after first few setup cells
-          insert_idx = min(insert_idx + 1, 3)
-          nb['cells'].insert(insert_idx, ci_cell)
-
-          # Save modified notebook
-          output_path = f"colab_ready/{os.path.basename(notebook_path)}"
-          with open(output_path, 'w') as f:
-              json.dump(nb, f, indent=2)
-
-          print(f"Prepared notebook: {output_path}")
-          print(f"  Steps: {num_steps}")
-          print(f"  Learning rate: {learning_rate}")
-          print(f"  Run name: {run_name}")
-          EOF
-
-          # Copy the notebook
-          cp "$NOTEBOOK_PATH" colab_ready/ 2>/dev/null || true
-
-          echo "notebook_name=$NOTEBOOK" >> $GITHUB_OUTPUT
-
-      - name: Create Colab branch
-        run: |
-          BRANCH_NAME="colab-run-${{ github.run_id }}"
-
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-
-          # Create and switch to new branch
-          git checkout -b $BRANCH_NAME
-
-          # Copy prepared notebook to notebooks directory
-          NOTEBOOK="${{ github.event.inputs.notebook }}"
-          if [ "$NOTEBOOK" = "train_colab" ]; then
-            cp colab_ready/*.ipynb demo/
-          else
-            cp colab_ready/*.ipynb notebooks/
-          fi
-
-          # Commit changes
-          git add -A
-          git commit -m "Prepare Colab notebook with CI parameters
-
-          Steps: ${{ github.event.inputs.num_steps }}
-          Learning rate: ${{ github.event.inputs.learning_rate }}
-          Run name: ${{ github.event.inputs.run_name || 'colab-run' }}-${{ github.run_id }}"
-
-          # Push branch
-          git push origin $BRANCH_NAME
-
-          echo "COLAB_BRANCH=$BRANCH_NAME" >> $GITHUB_ENV
-
-      - name: Generate Colab URLs
+      - name: Validate notebook exists
         run: |
           NOTEBOOK="${{ github.event.inputs.notebook }}"
-          BRANCH="colab-run-${{ github.run_id }}"
-          REPO="42euge/ee596-fp"
+          NOTEBOOK_PATH="notebooks/${NOTEBOOK}.ipynb"
 
-          if [ "$NOTEBOOK" = "train_colab" ]; then
-            NOTEBOOK_PATH="demo/train_colab.ipynb"
-          else
-            NOTEBOOK_PATH="notebooks/${NOTEBOOK}.ipynb"
+          if [ ! -f "$NOTEBOOK_PATH" ]; then
+            echo "ERROR: Notebook not found: $NOTEBOOK_PATH"
+            exit 1
           fi
 
-          # Generate Colab URL
-          COLAB_URL="https://colab.research.google.com/github/${REPO}/blob/${BRANCH}/${NOTEBOOK_PATH}"
+          echo "Notebook found: $NOTEBOOK_PATH"
+          echo "NOTEBOOK_PATH=$NOTEBOOK_PATH" >> $GITHUB_ENV
+
+      - name: Generate Colab URL
+        run: |
+          NOTEBOOK="${{ github.event.inputs.notebook }}"
+          REPO="${{ github.repository }}"
+          NOTEBOOK_PATH="notebooks/${NOTEBOOK}.ipynb"
+          COLAB_URL="https://colab.research.google.com/github/${REPO}/blob/main/${NOTEBOOK_PATH}"
 
           echo ""
           echo "=============================================="
@@ -185,44 +48,21 @@ jobs:
           echo "Open in Google Colab:"
           echo "$COLAB_URL"
           echo ""
-          echo "Parameters:"
-          echo "  - Steps: ${{ github.event.inputs.num_steps }}"
-          echo "  - Learning rate: ${{ github.event.inputs.learning_rate }}"
-          echo "  - Run name: ${{ github.event.inputs.run_name || 'colab-run' }}-${{ github.run_id }}"
-          echo ""
           echo "Instructions:"
           echo "1. Click the link above to open in Colab"
           echo "2. Connect to a TPU runtime (Runtime > Change runtime type > TPU)"
-          echo "3. Run all cells (Runtime > Run all)"
-          echo "4. Training parameters are pre-configured in the notebook"
+          echo "3. Configure training parameters in the notebook"
+          echo "4. Run all cells (Runtime > Run all)"
           echo ""
           echo "=============================================="
 
-          # Also create a summary
+          # Create summary
           echo "## Colab Notebook Ready" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Open in Colab" >> $GITHUB_STEP_SUMMARY
           echo "[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)]($COLAB_URL)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Parameters" >> $GITHUB_STEP_SUMMARY
-          echo "| Parameter | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|-----------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Steps | ${{ github.event.inputs.num_steps }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Learning Rate | ${{ github.event.inputs.learning_rate }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Run Name | ${{ github.event.inputs.run_name || 'colab-run' }}-${{ github.run_id }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Instructions" >> $GITHUB_STEP_SUMMARY
           echo "1. Click the badge above to open in Colab" >> $GITHUB_STEP_SUMMARY
           echo "2. Change runtime to TPU (Runtime > Change runtime type > TPU)" >> $GITHUB_STEP_SUMMARY
-          echo "3. Run all cells" >> $GITHUB_STEP_SUMMARY
-
-      - name: Cleanup old Colab branches
-        continue-on-error: true
-        run: |
-          # Delete colab branches older than 7 days
-          git fetch --all
-          for branch in $(git branch -r | grep 'origin/colab-run-' | sed 's/origin\///'); do
-            # Get branch age (this is a simplified check)
-            echo "Found old colab branch: $branch"
-          done
-          echo "Note: Manual cleanup of old colab-run-* branches may be needed"
+          echo "3. Configure training parameters in the notebook" >> $GITHUB_STEP_SUMMARY
+          echo "4. Run all cells" >> $GITHUB_STEP_SUMMARY
