@@ -3,9 +3,11 @@
 ## Overview
 This document describes how to set up and maintain the GitHub Actions CI/CD pipeline for TPU training.
 
-There are two workflows available:
+There are four workflows available:
 1. **TPU Training CI** (`tpu-training.yml`) - Quick validation runs for PRs
 2. **TPU Training (Full)** (`tpu-training-full.yml`) - Full training runs with W&B support
+3. **Kaggle Training** (`kaggle-training.yml`) - Run training on Kaggle's free TPU/GPU
+4. **Colab Training Setup** (`colab-training.yml`) - Prepare notebooks for Google Colab
 
 ## Quick Setup (Coding Agent Prompt)
 
@@ -78,6 +80,14 @@ gh secret set WANDB_API_KEY --repo 42euge/ee596-fp
 
 > **Note:** WANDB_API_KEY is already configured for this repository.
 
+### 6. Set Kaggle Credentials (for Kaggle workflow)
+
+```bash
+# Get credentials from https://www.kaggle.com/settings > API > Create New Token
+gh secret set KAGGLE_USERNAME --repo 42euge/ee596-fp
+gh secret set KAGGLE_KEY --repo 42euge/ee596-fp
+```
+
 ---
 
 ## Verify Setup
@@ -87,9 +97,11 @@ gh secret set WANDB_API_KEY --repo 42euge/ee596-fp
 gh secret list --repo 42euge/ee596-fp
 
 # Current configuration:
-# GCP_SA_KEY      ✓ configured
-# HF_TOKEN        ✓ configured
-# WANDB_API_KEY   ✓ configured
+# GCP_SA_KEY      ✓ configured (for GCP TPU)
+# HF_TOKEN        ✓ configured (for gated models)
+# WANDB_API_KEY   ✓ configured (for experiment tracking)
+# KAGGLE_USERNAME (for Kaggle workflow)
+# KAGGLE_KEY      (for Kaggle workflow)
 ```
 
 ---
@@ -151,6 +163,64 @@ gh workflow run tpu-training-full.yml --repo 42euge/ee596-fp \
 **View W&B Dashboard:**
 After starting a run, the training logs will be available at:
 https://wandb.ai/eugeniorrivera-university-of-washington/tunix-grpo-ci
+
+### Kaggle Training
+
+Run training on Kaggle's free TPU/GPU resources (30 hrs/week quota).
+
+**Manual Trigger:**
+1. Go to https://github.com/42euge/ee596-fp/actions
+2. Select "Kaggle Training"
+3. Configure parameters:
+   - `num_steps`: Number of training steps
+   - `accelerator`: TPU, GPU, or none
+   - `run_name`: Optional run name
+   - `wait_for_completion`: Wait and poll for results
+
+**Via CLI:**
+```bash
+# Basic run with TPU
+gh workflow run kaggle-training.yml --repo 42euge/ee596-fp \
+  -f num_steps=100 \
+  -f accelerator=tpu
+
+# GPU run without waiting
+gh workflow run kaggle-training.yml --repo 42euge/ee596-fp \
+  -f num_steps=50 \
+  -f accelerator=gpu \
+  -f wait_for_completion=false
+```
+
+**View Kernel:**
+After the workflow runs, the kernel is available at:
+https://www.kaggle.com/code/YOUR_USERNAME/tunix-grpo-training
+
+### Colab Training Setup
+
+Prepare a notebook with pre-configured parameters for Google Colab.
+
+> **Note:** Google Colab doesn't have a programmatic API. This workflow creates
+> a ready-to-run notebook and provides a direct link to open it in Colab.
+
+**Manual Trigger:**
+1. Go to https://github.com/42euge/ee596-fp/actions
+2. Select "Colab Training Setup"
+3. Configure parameters and run
+4. Click the "Open in Colab" link in the workflow summary
+
+**Via CLI:**
+```bash
+gh workflow run colab-training.yml --repo 42euge/ee596-fp \
+  -f num_steps=100 \
+  -f learning_rate=3e-6 \
+  -f notebook=grpo_gemma_tunrex_gdrive_save
+```
+
+**After workflow completes:**
+1. Go to the workflow run summary
+2. Click the "Open in Colab" badge
+3. Change runtime to TPU (Runtime > Change runtime type > TPU)
+4. Run all cells - parameters are pre-configured
 
 ---
 
