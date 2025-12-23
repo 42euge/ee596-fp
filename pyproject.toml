@@ -17,8 +17,8 @@ dependencies = [
     "wandb>=0.16.0",
     "tensorflow",
     "tensorflow_datasets",
-    "tunix",
+    "google-tunix",
 ]
 
 [tool.uv.sources]
-tunix = { path = "tunix", editable = true }
+google-tunix = { path = "tunix", editable = true }
