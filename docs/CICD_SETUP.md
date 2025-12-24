@@ -3,11 +3,12 @@
 ## Overview
 This document describes how to set up and maintain the GitHub Actions CI/CD pipeline for TPU training.
 
-There are four workflows available:
+There are five workflows available:
 1. **TPU Training CI** (`tpu-training.yml`) - Quick validation runs for PRs
 2. **TPU Training (Full)** (`tpu-training-full.yml`) - Full training runs with W&B support
 3. **Kaggle Training** (`kaggle-training.yml`) - Run training on Kaggle's free TPU/GPU
 4. **Colab Training Setup** (`colab-training.yml`) - Prepare notebooks for Google Colab
+5. **Build Docker Image** (`docker-build.yml`) - Build and push Docker image to Artifact Registry
 
 ## Quick Setup (Coding Agent Prompt)
 
@@ -44,6 +45,11 @@ gcloud projects add-iam-policy-binding kaggle-euge \
 gcloud projects add-iam-policy-binding kaggle-euge \
   --member="serviceAccount:github-tpu-ci@kaggle-euge.iam.gserviceaccount.com" \
   --role="roles/compute.instanceAdmin.v1" --quiet
+
+# Artifact Registry writer - push Docker images
+gcloud projects add-iam-policy-binding kaggle-euge \
+  --member="serviceAccount:github-tpu-ci@kaggle-euge.iam.gserviceaccount.com" \
+  --role="roles/artifactregistry.writer" --quiet
 
 # Service Account User - required to create TPU VMs (uses default compute SA)
 gcloud iam service-accounts add-iam-policy-binding \
@@ -222,6 +228,34 @@ gh workflow run colab-training.yml --repo 42euge/ee596-fp \
 3. Change runtime to TPU (Runtime > Change runtime type > TPU)
 4. Run all cells - parameters are pre-configured
 
+### Build Docker Image
+
+Build and push a Docker image to Google Artifact Registry.
+
+**Automatic Trigger:**
+- Runs on push to `main` when these files change:
+  - `Dockerfile`, `pyproject.toml`, `uv.lock`
+  - `tunix/**`, `TunRex/**`, `scripts/**`, `src/**`
+
+**Manual Trigger:**
+```bash
+gh workflow run docker-build.yml --repo 42euge/ee596-fp
+```
+
+**Image Location:**
+```
+us-central1-docker.pkg.dev/kaggle-euge/tunix-training/grpo-trainer:latest
+```
+
+**Pull the Image:**
+```bash
+# Configure Docker for Artifact Registry
+gcloud auth configure-docker us-central1-docker.pkg.dev
+
+# Pull
+docker pull us-central1-docker.pkg.dev/kaggle-euge/tunix-training/grpo-trainer:latest
+```
+
 ---
 
 ## Weights & Biases (W&B)
@@ -377,6 +411,19 @@ gcloud iam service-accounts keys create /dev/stdout \
 ```bash
 gcloud iam service-accounts delete github-tpu-ci@kaggle-euge.iam.gserviceaccount.com \
   --project=kaggle-euge
+```
+
+### Artifact Registry Permission Denied
+If you see this error when pushing Docker images:
+```
+denied: Permission "artifactregistry.repositories.uploadArtifacts" denied
+```
+
+Grant Artifact Registry writer role:
+```bash
+gcloud projects add-iam-policy-binding kaggle-euge \
+  --member="serviceAccount:github-tpu-ci@kaggle-euge.iam.gserviceaccount.com" \
+  --role="roles/artifactregistry.writer"
 ```
 
 ### Manual TPU Cleanup
