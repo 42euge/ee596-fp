@@ -14,6 +14,10 @@ tqdm>=4.66.0
 huggingface_hub>=0.21.0
 numpy>=1.24.0
 
+# Reward robustness evaluation
+nltk>=3.8.0
+scipy>=1.10.0
+
 # Hyperparameter search (optional, for Bayesian optimization)
 # optuna>=3.5.0
 # matplotlib>=3.7.0  # for plotting optimization history

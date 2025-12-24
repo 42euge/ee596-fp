@@ -49,6 +49,27 @@ from .hyperparam_search import (
     analyze_results,
 )
 
+# Reward Robustness Evaluation
+from .reward_robustness import (
+    RobustnessConfig,
+    PerturbationConfig,
+    ExternalRewardConfig,
+    get_default_config as get_default_robustness_config,
+    get_quick_config as get_quick_robustness_config,
+    get_thorough_config as get_thorough_robustness_config,
+    RobustnessEvaluator,
+    RobustnessResults,
+    ConsistencyMetrics,
+    compute_consistency_metrics,
+    PerturbationPipeline,
+    SynonymPerturbation,
+    ParaphrasePerturbation,
+    SentenceReorderPerturbation,
+    InternalReward,
+    HuggingFaceReward,
+    load_reward_model,
+)
+
 __version__ = "1.0.0"
 __all__ = [
     # Config
@@ -91,4 +112,22 @@ __all__ = [
     "params_to_config",
     "create_objective_from_eval_fn",
     "analyze_results",
+    # Reward Robustness
+    "RobustnessConfig",
+    "PerturbationConfig",
+    "ExternalRewardConfig",
+    "get_default_robustness_config",
+    "get_quick_robustness_config",
+    "get_thorough_robustness_config",
+    "RobustnessEvaluator",
+    "RobustnessResults",
+    "ConsistencyMetrics",
+    "compute_consistency_metrics",
+    "PerturbationPipeline",
+    "SynonymPerturbation",
+    "ParaphrasePerturbation",
+    "SentenceReorderPerturbation",
+    "InternalReward",
+    "HuggingFaceReward",
+    "load_reward_model",
 ]
