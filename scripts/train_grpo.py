@@ -12,13 +12,14 @@ Usage:
     python scripts/train_grpo.py --num-steps 100 --model-id google/gemma-3-1b-it
 """
 
-import argparse
 import json
 import os
 import sys
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from scripts.utils import parse_args, check_tpu_availability
 
 
 # Monkey-patch tunix bug: is_positive_integer calls .is_integer() which only works on float
@@ -35,90 +36,6 @@ def _patch_tunix_utils():
     rl_utils.is_positive_integer = is_positive_integer_fixed
 
 _patch_tunix_utils()
-
-
-def parse_args():
-    parser = argparse.ArgumentParser(description="Run GRPO training on TPU")
-
-    # Training parameters
-    parser.add_argument("--num-steps", type=int, default=100,
-                        help="Number of training steps")
-    parser.add_argument("--model-id", type=str, default="google/gemma-3-1b-it",
-                        help="HuggingFace model ID")
-    parser.add_argument("--learning-rate", type=float, default=3e-6,
-                        help="Learning rate")
-    parser.add_argument("--batch-size", type=int, default=1,
-                        help="Micro batch size")
-    parser.add_argument("--use-lora", action="store_true",
-                        help="Use LoRA for training")
-    parser.add_argument("--lora-rank", type=int, default=64,
-                        help="LoRA rank")
-    parser.add_argument("--lora-alpha", type=float, default=64.0,
-                        help="LoRA alpha")
-
-    # GRPO parameters
-    parser.add_argument("--num-generations", type=int, default=2,
-                        help="Number of generations per prompt (G in GRPO)")
-    parser.add_argument("--beta", type=float, default=0.08,
-                        help="KL divergence coefficient")
-    parser.add_argument("--epsilon", type=float, default=0.2,
-                        help="Clipping epsilon")
-    parser.add_argument("--temperature", type=float, default=0.9,
-                        help="Sampling temperature during training")
-
-    # Generation parameters
-    parser.add_argument("--max-prompt-length", type=int, default=256,
-                        help="Maximum prompt length")
-    parser.add_argument("--max-generation-steps", type=int, default=768,
-                        help="Maximum generation steps")
-
-    # Optimizer parameters
-    parser.add_argument("--weight-decay", type=float, default=0.1,
-                        help="Weight decay")
-    parser.add_argument("--max-grad-norm", type=float, default=0.1,
-                        help="Maximum gradient norm for clipping")
-    parser.add_argument("--warmup-fraction", type=float, default=0.1,
-                        help="Fraction of steps for warmup")
-
-    # Checkpointing
-    parser.add_argument("--checkpoint-dir", type=str, default="/tmp/grpo_checkpoints",
-                        help="Directory to save checkpoints")
-    parser.add_argument("--save-interval", type=int, default=50,
-                        help="Save checkpoint every N steps")
-    parser.add_argument("--max-checkpoints", type=int, default=3,
-                        help="Maximum number of checkpoints to keep")
-
-    # W&B parameters
-    parser.add_argument("--wandb-project", type=str, default="tunix-grpo",
-                        help="W&B project name")
-    parser.add_argument("--run-name", type=str, default="",
-                        help="W&B run name")
-    parser.add_argument("--no-wandb", action="store_true",
-                        help="Disable W&B logging")
-
-    # Data parameters
-    parser.add_argument("--train-fraction", type=float, default=0.9,
-                        help="Fraction of data for training")
-    parser.add_argument("--eval-every", type=int, default=50,
-                        help="Evaluate every N steps")
-
-    return parser.parse_args()
-
-
-def check_tpu_availability():
-    """Check if TPU is available and return device info."""
-    import jax
-
-    devices = jax.devices()
-    print(f"JAX devices: {devices}")
-
-    tpu_devices = [d for d in devices if d.platform == "tpu"]
-    if not tpu_devices:
-        print("WARNING: No TPU devices found. Running on CPU/GPU.")
-        return len(devices), False
-
-    print(f"Found {len(tpu_devices)} TPU core(s)")
-    return len(tpu_devices), True
 
 
 def get_mesh_config(num_devices):
@@ -435,14 +352,26 @@ def main():
             cluster_config=cluster_config,
         )
 
+        # Build reward functions list
+        reward_fns = [
+            match_format_exactly,
+            match_format_approximately,
+            check_answer,
+            check_numbers,
+        ]
+
+        # Add rubric-based reward if specified
+        if args.rubric_file:
+            from src.rubrics import load_rubricset_from_yaml, create_grpo_reward_function
+            print(f"  Loading rubric from: {args.rubric_file}")
+            rubricset = load_rubricset_from_yaml(args.rubric_file)
+            rubric_reward = create_grpo_reward_function(rubricset, weight=args.rubric_weight)
+            reward_fns.append(rubric_reward)
+            print(f"  Added rubric reward (weight={args.rubric_weight})")
+
         grpo_trainer = GRPOLearner(
             rl_cluster=rl_cluster,
-            reward_fns=[
-                match_format_exactly,
-                match_format_approximately,
-                check_answer,
-                check_numbers,
-            ],
+            reward_fns=reward_fns,
             algo_config=grpo_config,
         )
 

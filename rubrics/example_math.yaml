@@ -1,0 +1,124 @@
+name: "Math Reasoning Rubric Set"
+description: "Rubrics for evaluating mathematical reasoning responses"
+metadata:
+  version: "1.0"
+  author: "tunix-hackathon"
+
+rubrics:
+  - name: "step_by_step_reasoning"
+    description: "Evaluates quality of mathematical step-by-step reasoning"
+    question_types:
+      - math
+      - arithmetic
+      - algebra
+    criteria:
+      - name: "logical_flow"
+        description: "Reasoning follows logical progression from problem to solution"
+        weight: 2.0
+        keywords:
+          - first
+          - then
+          - therefore
+          - because
+          - step
+          - next
+          - finally
+        examples:
+          0: "Jumps directly to answer with no explanation"
+          5: "Shows some steps but skips key reasoning"
+          10: "Complete logical progression with all steps explained"
+
+      - name: "accuracy"
+        description: "Mathematical operations are performed correctly"
+        weight: 2.0
+        keywords:
+          - calculate
+          - equals
+          - result
+          - sum
+          - product
+          - difference
+
+      - name: "format_compliance"
+        description: "Uses required <reasoning> and <answer> tags"
+        weight: 1.0
+        keywords:
+          - "<reasoning>"
+          - "</reasoning>"
+          - "<answer>"
+          - "</answer>"
+
+    reference_response: |
+      <reasoning>
+      Let me solve this step by step.
+      First, I identify the key values in the problem.
+      Then, I apply the appropriate mathematical operations.
+      Therefore, the answer is calculated as follows...
+      </reasoning>
+      <answer>42</answer>
+    target_score: 18.0
+
+  - name: "word_problem_solving"
+    description: "Evaluates solutions to word problems requiring multiple steps"
+    question_types:
+      - math
+      - word_problem
+    criteria:
+      - name: "problem_understanding"
+        description: "Correctly identifies what the problem is asking"
+        weight: 1.5
+        keywords:
+          - need
+          - find
+          - determine
+          - asking
+          - question
+
+      - name: "variable_identification"
+        description: "Identifies and labels relevant quantities"
+        weight: 1.0
+        keywords:
+          - let
+          - define
+          - given
+          - known
+          - value
+
+      - name: "step_by_step"
+        description: "Shows clear step-by-step work"
+        weight: 2.0
+        keywords:
+          - step
+          - first
+          - second
+          - then
+          - next
+
+      - name: "final_answer"
+        description: "Provides a clear final answer with units if applicable"
+        weight: 1.5
+        keywords:
+          - answer
+          - therefore
+          - result
+          - total
+
+  - name: "quick_calculation"
+    description: "For simple arithmetic that needs minimal explanation"
+    question_types:
+      - arithmetic
+      - simple_math
+    criteria:
+      - name: "correctness"
+        description: "The answer is numerically correct"
+        weight: 3.0
+        keywords:
+          - equals
+          - "="
+
+      - name: "format"
+        description: "Uses proper answer format"
+        weight: 1.0
+        keywords:
+          - "<answer>"
+          - "</answer>"

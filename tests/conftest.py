@@ -166,3 +166,95 @@ def openrubrics_sample_data():
             "source": "openrubrics",
         },
     ]
+
+
+# =============================================================================
+# Rubrics Module Fixtures
+# =============================================================================
+
+@pytest.fixture
+def sample_criterion():
+    """A sample Criterion for testing."""
+    from src.rubrics.models import Criterion
+    return Criterion(
+        name="accuracy",
+        description="Tests the accuracy of the answer",
+        weight=2.0,
+        keywords=["correct", "accurate", "right"],
+    )
+
+
+@pytest.fixture
+def sample_rubric_obj():
+    """A sample Rubric object for testing."""
+    from src.rubrics.models import Criterion, Rubric
+    return Rubric(
+        name="math_evaluation",
+        description="Evaluates mathematical problem solving",
+        criteria=[
+            Criterion(
+                name="reasoning",
+                description="Shows clear step-by-step reasoning",
+                weight=2.0,
+                keywords=["step", "first", "then", "therefore"],
+            ),
+            Criterion(
+                name="format",
+                description="Uses proper format with tags",
+                weight=1.0,
+                keywords=["<reasoning>", "</reasoning>", "<answer>", "</answer>"],
+            ),
+            Criterion(
+                name="accuracy",
+                description="Provides correct final answer",
+                weight=2.0,
+                keywords=["correct", "equals", "result"],
+            ),
+        ],
+        question_types=["math", "arithmetic"],
+        reference_response="<reasoning>Step by step solution</reasoning><answer>42</answer>",
+        target_score=15.0,
+    )
+
+
+@pytest.fixture
+def sample_rubricset():
+    """A sample RubricSet for testing."""
+    from src.rubrics.models import Criterion, Rubric, RubricSet
+    return RubricSet(
+        name="test_rubricset",
+        description="A test rubric set",
+        rubrics=[
+            Rubric(
+                name="math_rubric",
+                description="For math questions",
+                criteria=[Criterion(name="calc", description="Shows calculation")],
+                question_types=["math"],
+            ),
+            Rubric(
+                name="general_rubric",
+                description="For general questions",
+                criteria=[Criterion(name="clarity", description="Clear explanation")],
+                question_types=["general"],
+            ),
+        ],
+    )
+
+
+@pytest.fixture
+def rubric_test_dataset():
+    """A dataset for testing rubrics."""
+    return [
+        {
+            "question": "What is 2+2?",
+            "response": "<reasoning>2+2=4</reasoning><answer>4</answer>",
+        },
+        {
+            "question": "What is 3*4?",
+            "response": "<reasoning>3 times 4 equals 12</reasoning><answer>12</answer>",
+        },
+        {
+            "question": "Explain gravity",
+            "response": "Gravity is a force that attracts objects toward each other.",
+        },
+    ]
