@@ -1,7 +1,47 @@
-"""Integration tests for src/model.py with mocked dependencies."""
+"""Integration tests for src/model.py with mocked dependencies.
+
+Note: We create a mock torch module that provides basic tensor functionality
+needed for the tests, since torch is not installed in CI.
+"""
 
 import pytest
+import sys
 from unittest.mock import Mock, patch, MagicMock
+
+# Create a mock torch module with tensor support
+class MockTensor:
+    def __init__(self, data):
+        self.data = data
+    def __getitem__(self, idx):
+        return self.data[idx] if isinstance(self.data, list) else self.data
+
+class MockTorch:
+    @staticmethod
+    def tensor(data):
+        return MockTensor(data)
+
+    class cuda:
+        @staticmethod
+        def is_available():
+            return False
+
+    class backends:
+        class mps:
+            @staticmethod
+            def is_available():
+                return False
+
+# Install mock torch before any imports
+mock_torch = MockTorch()
+mock_torch.cuda = MockTorch.cuda
+mock_torch.backends = MockTorch.backends
+sys.modules["torch"] = mock_torch
+sys.modules["torch.cuda"] = mock_torch.cuda
+sys.modules["torch.backends"] = mock_torch.backends
+sys.modules["torch.backends.mps"] = mock_torch.backends.mps
+sys.modules["transformers"] = MagicMock()
+
+# Now we can import - use the mock torch for tensor creation in tests
 import torch
 
 from src.model import get_device, GemmaModel, load_model

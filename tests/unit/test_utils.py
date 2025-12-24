@@ -1,6 +1,19 @@
-"""Tests for src/utils.py module."""
+"""Tests for src/utils.py module.
+
+Note: We mock torch before importing to avoid requiring it in CI.
+"""
 
 import pytest
+import sys
+from unittest.mock import MagicMock
+
+# Mock torch and its submodules before importing src (which imports src.model which needs torch)
+sys.modules["torch"] = MagicMock()
+sys.modules["torch.cuda"] = MagicMock()
+sys.modules["torch.backends"] = MagicMock()
+sys.modules["torch.backends.mps"] = MagicMock()
+sys.modules["transformers"] = MagicMock()
+
 from src.utils import (
     extract_reasoning_and_answer,
     extract_numerical_answer,
