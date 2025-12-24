@@ -10,6 +10,9 @@ from .config import (
     RobustnessConfig,
     PerturbationConfig,
     ExternalRewardConfig,
+    get_default_config,
+    get_quick_config,
+    get_thorough_config,
 )
 from .evaluator import RobustnessEvaluator, RobustnessResults
 from .metrics import ConsistencyMetrics, compute_consistency_metrics
@@ -32,6 +35,9 @@ __all__ = [
     "RobustnessConfig",
     "PerturbationConfig",
     "ExternalRewardConfig",
+    "get_default_config",
+    "get_quick_config",
+    "get_thorough_config",
     # Evaluator
     "RobustnessEvaluator",
     "RobustnessResults",
