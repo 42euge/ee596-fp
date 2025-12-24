@@ -18,21 +18,7 @@ import sys
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-
-def check_tpu_availability():
-    """Check if TPU is available."""
-    import jax
-
-    devices = jax.devices()
-    print(f"JAX devices: {devices}")
-
-    tpu_devices = [d for d in devices if d.platform == "tpu"]
-    if not tpu_devices:
-        print("WARNING: No TPU devices found. Running on CPU/GPU.")
-        return False
-
-    print(f"Found {len(tpu_devices)} TPU core(s)")
-    return True
+from scripts.utils import check_tpu_availability
 
 
 def main():
@@ -61,7 +47,7 @@ def main():
 
     # Step 2: Check TPU
     print("\n[2/5] Checking TPU availability...")
-    has_tpu = check_tpu_availability()
+    _, has_tpu = check_tpu_availability()
 
     if args.dry_run:
         print("\n[DRY RUN] Skipping training steps.")
