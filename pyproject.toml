@@ -18,6 +18,7 @@ dependencies = [
     "tensorflow",
     "tensorflow_datasets",
     "google-tunix",
+    "tunrex",
 ]
 
 [tool.uv]
@@ -25,3 +26,4 @@ environments = ["sys_platform == 'linux'"]
 
 [tool.uv.sources]
 google-tunix = { path = "tunix", editable = true }
+tunrex = { path = "TunRex", editable = true }
