@@ -19,6 +19,7 @@ dependencies = [
     "tensorflow_datasets",
     "google-tunix",
     "tunrex",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
