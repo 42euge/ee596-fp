@@ -258,3 +258,132 @@ def rubric_test_dataset():
             "response": "Gravity is a force that attracts objects toward each other.",
         },
     ]
+
+
+# =============================================================================
+# Reward Robustness Fixtures
+# =============================================================================
+
+@pytest.fixture
+def robustness_config():
+    """Basic robustness evaluation configuration."""
+    from reward_robustness.config import (
+        RobustnessConfig,
+        PerturbationConfig,
+    )
+
+    return RobustnessConfig(
+        internal_rewards=["format_reward"],
+        perturbations=PerturbationConfig(
+            enabled_types=["reorder"],
+            num_variants=3,
+        ),
+        num_samples=5,
+        save_detailed=True,
+    )
+
+
+@pytest.fixture
+def robustness_config_quick():
+    """Quick robustness evaluation configuration for fast tests."""
+    from reward_robustness.config import get_quick_config
+
+    return get_quick_config()
+
+
+@pytest.fixture
+def robustness_sample_completions():
+    """Sample completions with multi-sentence reasoning for perturbation testing."""
+    return [
+        """<reasoning>
+First, I need to understand the problem. Then, I will identify the key numbers.
+Next, I perform the calculation. After that, I verify my result.
+Finally, I provide the answer.
+</reasoning>
+<answer>42</answer>""",
+        """<reasoning>
+Let me break this down step by step. The first step is to add the numbers.
+The second step is to multiply. Then I subtract the discount.
+The final step is to round to the nearest dollar.
+</reasoning>
+<answer>100</answer>""",
+        """<reasoning>
+I'll solve this systematically. Start with the given values.
+Apply the formula. Calculate intermediate results.
+Combine everything for the final answer.
+</reasoning>
+<answer>256</answer>""",
+    ]
+
+
+@pytest.fixture
+def robustness_sample_prompts():
+    """Sample prompts for robustness testing."""
+    return [
+        "What is 6 * 7?",
+        "Calculate the total after a 20% discount on $125.",
+        "What is 2^8?",
+    ]
+
+
+@pytest.fixture
+def robustness_sample_answers():
+    """Answers for robustness sample prompts."""
+    return ["42", "100", "256"]
+
+
+@pytest.fixture
+def consistency_metrics_sample():
+    """Sample ConsistencyMetrics for testing."""
+    from reward_robustness.metrics import ConsistencyMetrics
+
+    return ConsistencyMetrics(
+        reward_name="test_reward",
+        mean_variance=0.15,
+        max_variance=0.45,
+        median_variance=0.12,
+        variance_std=0.08,
+        mean_cv=0.1,
+        kendall_tau=0.85,
+        spearman_rho=0.88,
+        flip_rate=0.05,
+        max_deviation=0.3,
+        mean_deviation=0.12,
+        stability_score=0.82,
+        num_samples=100,
+    )
+
+
+@pytest.fixture
+def perturbation_pipeline_reorder():
+    """Perturbation pipeline with only reorder (no external deps)."""
+    from reward_robustness.perturbations import PerturbationPipeline
+    from reward_robustness.config import PerturbationConfig
+
+    config = PerturbationConfig(
+        enabled_types=["reorder"],
+        num_variants=3,
+    )
+    return PerturbationPipeline(config)
+
+
+@pytest.fixture
+def mock_reward_scores():
+    """Mock reward scores for metrics testing."""
+    import numpy as np
+
+    np.random.seed(42)
+
+    # Original scores
+    original = np.array([1.0, 2.0, 1.5, 2.5, 3.0])
+
+    # Perturbed scores with slight variations
+    perturbed = np.array([
+        [1.1, 0.9, 1.0, 1.05, 0.95],
+        [2.1, 1.9, 2.0, 2.05, 1.95],
+        [1.6, 1.4, 1.5, 1.55, 1.45],
+        [2.6, 2.4, 2.5, 2.55, 2.45],
+        [3.1, 2.9, 3.0, 3.05, 2.95],
+    ])
+
+    return original, perturbed
