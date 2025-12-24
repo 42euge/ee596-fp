@@ -31,7 +31,10 @@ class Criterion:
 
     def to_text(self) -> str:
         """Convert criterion to text format for embedding in prompts."""
-        return f"- {self.name}: {self.description}"
+        text = f"- {self.name}: {self.description}"
+        if self.keywords:
+            text += f" (keywords: {', '.join(self.keywords)})"
+        return text
 
     def to_dict(self) -> dict[str, Any]:
         """Convert criterion to dictionary for serialization."""
