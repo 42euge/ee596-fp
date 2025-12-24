@@ -122,7 +122,7 @@ jobs:
             sleep 15
           done
 
-      - name: Setup Docker on TPU VM
+      - name: Setup Docker and pull image on TPU VM
         env:
           TPU_ZONE: ${{ steps.create-tpu.outputs.tpu_zone }}
         run: |
@@ -137,18 +137,11 @@ jobs:
                 sudo usermod -aG docker \$USER
               fi
 
-              # Configure Docker for Artifact Registry
-              gcloud auth configure-docker ${GCP_REGION}-docker.pkg.dev --quiet
-            "
+              # Get access token and login to Artifact Registry
+              ACCESS_TOKEN=\$(gcloud auth print-access-token)
+              echo \$ACCESS_TOKEN | sudo docker login -u oauth2accesstoken --password-stdin https://${GCP_REGION}-docker.pkg.dev
 
-      - name: Pull Docker image
-        env:
-          TPU_ZONE: ${{ steps.create-tpu.outputs.tpu_zone }}
-        run: |
-          gcloud compute tpus tpu-vm ssh $TPU_NAME \
-            --project=$GCP_PROJECT \
-            --zone=$TPU_ZONE \
-            --command="
+              # Pull image
               echo 'Pulling Docker image: ${DOCKER_IMAGE}:${IMAGE_TAG}'
               sudo docker pull ${DOCKER_IMAGE}:${IMAGE_TAG}
             "
