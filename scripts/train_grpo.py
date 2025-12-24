@@ -108,6 +108,8 @@ def main():
                     "warmup_fraction": args.warmup_fraction,
                     "num_tpu_cores": num_devices,
                     "has_tpu": has_tpu,
+                    "rubric_file": args.rubric_file or None,
+                    "rubric_weight": args.rubric_weight if args.rubric_file else None,
                 }
             )
             print(f"  W&B initialized: {wandb.run.url}")
@@ -352,22 +354,52 @@ def main():
             cluster_config=cluster_config,
         )
 
-        # Build reward functions list
-        reward_fns = [
+        # Build reward functions list with W&B logging
+        base_reward_fns = [
             match_format_exactly,
             match_format_approximately,
             check_answer,
             check_numbers,
         ]
+        reward_names = [
+            "format_exact",
+            "format_approx",
+            "answer_check",
+            "number_check",
+        ]
 
-        # Add rubric-based reward if specified
+        # Load rubric if specified
+        rubricset = None
         if args.rubric_file:
-            from src.rubrics import load_rubricset_from_yaml, create_grpo_reward_function
+            from src.rubrics import load_rubricset_from_yaml
             print(f"  Loading rubric from: {args.rubric_file}")
             rubricset = load_rubricset_from_yaml(args.rubric_file)
-            rubric_reward = create_grpo_reward_function(rubricset, weight=args.rubric_weight)
-            reward_fns.append(rubric_reward)
-            print(f"  Added rubric reward (weight={args.rubric_weight})")
+            print(f"  Loaded rubric: {rubricset.name} with {len(rubricset.rubrics)} rubric(s)")
+
+        # Wrap reward functions with W&B logging
+        reward_logger = None
+        if wandb_enabled:
+            try:
+                from src.wandb_rewards import create_logged_reward_fns
+                reward_fns, reward_logger = create_logged_reward_fns(
+                    base_reward_fns,
+                    reward_names,
+                    rubricset=rubricset,
+                    rubric_weight=args.rubric_weight if args.rubric_file else 1.0,
+                    log_every_n_steps=10,
+                )
+                print(f"  W&B reward logging enabled for {len(reward_fns)} reward functions")
+            except ImportError as e:
+                print(f"  WARNING: Could not enable W&B reward logging: {e}")
+                reward_fns = base_reward_fns
+                if rubricset:
+                    from src.rubrics import create_grpo_reward_function
+                    reward_fns.append(create_grpo_reward_function(rubricset, weight=args.rubric_weight))
+        else:
+            reward_fns = base_reward_fns
+            if rubricset:
+                from src.rubrics import create_grpo_reward_function
+                reward_fns.append(create_grpo_reward_function(rubricset, weight=args.rubric_weight))
 
         grpo_trainer = GRPOLearner(
             rl_cluster=rl_cluster,
@@ -388,9 +420,13 @@ def main():
 
         grpo_trainer.train(train_dataset, val_dataset)
 
-    # Finish W&B
+    # Log reward summary and finish W&B
     if wandb_enabled:
         import wandb
+        if reward_logger:
+            reward_logger.log_summary()
+            if hasattr(reward_logger, 'log_rubric_summary'):
+                reward_logger.log_rubric_summary()
         wandb.finish()
 
     print("\n" + "=" * 60)
