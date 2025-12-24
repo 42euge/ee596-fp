@@ -19,6 +19,10 @@ on:
           - v5litepod-8
           - v5litepod-16
 
+concurrency:
+  group: tpu-training
+  cancel-in-progress: false  # Queue instead of cancel
+
 env:
   TPU_NAME: ci-training-${{ github.run_id }}
   GCP_PROJECT: kaggle-euge
