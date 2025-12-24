@@ -21,6 +21,22 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
+# Monkey-patch tunix bug: is_positive_integer calls .is_integer() which only works on float
+def _patch_tunix_utils():
+    """Fix tunix.rl.utils.is_positive_integer to handle int type."""
+    from tunix.rl import utils as rl_utils
+
+    def is_positive_integer_fixed(value, name: str):
+        if value is not None:
+            is_int = isinstance(value, int) or (isinstance(value, float) and value.is_integer())
+            if not is_int or value <= 0:
+                raise ValueError(f"{name} must be a positive integer. Got: {value}")
+
+    rl_utils.is_positive_integer = is_positive_integer_fixed
+
+_patch_tunix_utils()
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Run GRPO training on TPU")
 
@@ -384,10 +400,10 @@ def main():
         offload_to_cpu=False,
         training_config=rl_cluster_lib.RLTrainingConfig(
             actor_optimizer=optimizer,
-            eval_every_n_steps=float(args.eval_every),
-            max_steps=float(args.num_steps),
-            mini_batch_size=float(args.batch_size),
-            train_micro_batch_size=float(args.batch_size),
+            eval_every_n_steps=args.eval_every,
+            max_steps=args.num_steps,
+            mini_batch_size=args.batch_size,
+            train_micro_batch_size=args.batch_size,
             metrics_logging_options=metrics_logging_options,
             checkpoint_root_directory=args.checkpoint_dir,
             checkpointing_options=checkpointing_options,
