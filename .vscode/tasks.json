@@ -1,0 +1,179 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Reward Robustness: Evaluate (GSM8K)",
+      "type": "shell",
+      "command": "python",
+      "args": [
+        "-m", "src.reward_robustness.cli",
+        "evaluate",
+        "--data-source", "gsm8k",
+        "--num-samples", "${input:numSamples}",
+        "--rewards", "format_reward", "accuracy_reward",
+        "--perturbations", "synonym", "paraphrase", "reorder",
+        "--num-variants", "5"
+      ],
+      "group": "test",
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Reward Robustness: Evaluate (Quick)",
+      "type": "shell",
+      "command": "python",
+      "args": [
+        "-m", "src.reward_robustness.cli",
+        "evaluate",
+        "--data-source", "gsm8k",
+        "--num-samples", "10",
+        "--rewards", "format_reward", "accuracy_reward",
+        "--perturbations", "synonym",
+        "--num-variants", "3"
+      ],
+      "group": "test",
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Reward Robustness: Evaluate (OpenRubrics)",
+      "type": "shell",
+      "command": "python",
+      "args": [
+        "-m", "src.reward_robustness.cli",
+        "evaluate",
+        "--data-source", "openrubrics",
+        "--num-samples", "${input:numSamples}",
+        "--rewards", "format_reward", "rubric_reward",
+        "--perturbations", "synonym", "paraphrase", "reorder",
+        "--num-variants", "5"
+      ],
+      "group": "test",
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Reward Robustness: Evaluate with External Model",
+      "type": "shell",
+      "command": "python",
+      "args": [
+        "-m", "src.reward_robustness.cli",
+        "evaluate",
+        "--data-source", "gsm8k",
+        "--num-samples", "${input:numSamples}",
+        "--rewards", "format_reward", "accuracy_reward",
+        "--external-rewards", "${input:externalModel}",
+        "--perturbations", "synonym", "paraphrase",
+        "--num-variants", "5"
+      ],
+      "group": "test",
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Reward Robustness: Generate Report (Markdown)",
+      "type": "shell",
+      "command": "python",
+      "args": [
+        "-m", "src.reward_robustness.cli",
+        "report",
+        "--input", "${input:resultsFile}",
+        "--format", "markdown",
+        "--output", "./robustness_results/report.md"
+      ],
+      "group": "test",
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Reward Robustness: Generate Report (JSON)",
+      "type": "shell",
+      "command": "python",
+      "args": [
+        "-m", "src.reward_robustness.cli",
+        "report",
+        "--input", "${input:resultsFile}",
+        "--format", "json"
+      ],
+      "group": "test",
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Reward Robustness: Run Tests",
+      "type": "shell",
+      "command": "python",
+      "args": [
+        "-m", "pytest",
+        "tests/unit/test_reward_robustness_*.py",
+        "-v"
+      ],
+      "group": "test",
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Reward Robustness: Run Integration Tests",
+      "type": "shell",
+      "command": "python",
+      "args": [
+        "-m", "pytest",
+        "tests/integration/test_reward_robustness_*.py",
+        "-v"
+      ],
+      "group": "test",
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "problemMatcher": []
+    }
+  ],
+  "inputs": [
+    {
+      "id": "numSamples",
+      "type": "pickString",
+      "description": "Number of samples to evaluate",
+      "options": ["10", "50", "100", "500", "1000"],
+      "default": "100"
+    },
+    {
+      "id": "externalModel",
+      "type": "pickString",
+      "description": "External reward model",
+      "options": [
+        "RLHFlow/ArmoRM-Llama3-8B-v0.1",
+        "OpenAssistant/reward-model-deberta-v3-large-v2",
+        "weqweasdas/RM-Gemma-2B"
+      ],
+      "default": "RLHFlow/ArmoRM-Llama3-8B-v0.1"
+    },
+    {
+      "id": "resultsFile",
+      "type": "promptString",
+      "description": "Path to results JSON file",
+      "default": "./robustness_results/eval.json"
+    }
+  ]
+}
