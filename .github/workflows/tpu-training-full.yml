@@ -36,6 +36,14 @@ on:
         description: 'Use LoRA for training'
         default: true
         type: boolean
+      rubric_file:
+        description: 'Rubric YAML file (optional)'
+        default: ''
+        type: string
+      rubric_weight:
+        description: 'Rubric reward weight'
+        default: '1.0'
+        type: string
 
 concurrency:
   group: tpu-training
@@ -51,6 +59,8 @@ env:
   BATCH_SIZE: ${{ github.event.inputs.batch_size || '1' }}
   RUN_NAME: ${{ github.event.inputs.run_name || '' }}
   USE_LORA: ${{ github.event.inputs.use_lora || 'true' }}
+  RUBRIC_FILE: ${{ github.event.inputs.rubric_file || '' }}
+  RUBRIC_WEIGHT: ${{ github.event.inputs.rubric_weight || '1.0' }}
   # Zones to try in order (v5litepod available zones)
   TPU_ZONES: "us-central1-a us-east1-d us-east5-b us-south1-a europe-west4-b"
 
@@ -167,8 +177,14 @@ jobs:
             LORA_ARG="--use-lora"
           fi
 
+          # Build rubric arguments
+          RUBRIC_ARGS=""
+          if [ -n "$RUBRIC_FILE" ]; then
+            RUBRIC_ARGS="--rubric-file $RUBRIC_FILE --rubric-weight $RUBRIC_WEIGHT"
+          fi
+
           # Create the training command (use venv created by uv)
-          TRAIN_CMD="cd ~/training && source .venv/bin/activate && export HF_TOKEN='${HF_TOKEN}' && export WANDB_API_KEY='${WANDB_API_KEY}' && python scripts/train_grpo.py --num-steps $NUM_STEPS --model-id $MODEL_ID --learning-rate $LEARNING_RATE --batch-size $BATCH_SIZE --wandb-project tunix-grpo-ci $LORA_ARG $RUN_NAME_ARG"
+          TRAIN_CMD="cd ~/training && source .venv/bin/activate && export HF_TOKEN='${HF_TOKEN}' && export WANDB_API_KEY='${WANDB_API_KEY}' && python scripts/train_grpo.py --num-steps $NUM_STEPS --model-id $MODEL_ID --learning-rate $LEARNING_RATE --batch-size $BATCH_SIZE --wandb-project tunix-grpo-ci $LORA_ARG $RUN_NAME_ARG $RUBRIC_ARGS"
 
           gcloud compute tpus tpu-vm ssh $TPU_NAME \
             --project=$GCP_PROJECT \
