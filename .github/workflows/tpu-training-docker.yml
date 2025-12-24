@@ -1,0 +1,195 @@
+name: TPU Training (Docker)
+
+on:
+  workflow_dispatch:
+    inputs:
+      num_steps:
+        description: 'Number of training steps'
+        default: '100'
+        type: string
+      tpu_type:
+        description: 'TPU accelerator type'
+        default: 'v5litepod-4'
+        type: choice
+        options:
+          - v5litepod-1
+          - v5litepod-4
+          - v5litepod-8
+          - v5litepod-16
+      model_id:
+        description: 'Model ID (HuggingFace)'
+        default: 'google/gemma-3-1b-it'
+        type: string
+      learning_rate:
+        description: 'Learning rate'
+        default: '3e-6'
+        type: string
+      batch_size:
+        description: 'Batch size'
+        default: '1'
+        type: string
+      run_name:
+        description: 'W&B run name (optional)'
+        default: ''
+        type: string
+      use_lora:
+        description: 'Use LoRA for training'
+        default: true
+        type: boolean
+      image_tag:
+        description: 'Docker image tag'
+        default: 'latest'
+        type: string
+
+env:
+  TPU_NAME: training-${{ github.run_id }}
+  GCP_PROJECT: kaggle-euge
+  GCP_REGION: us-central1
+  TPU_TYPE: ${{ github.event.inputs.tpu_type || 'v5litepod-4' }}
+  NUM_STEPS: ${{ github.event.inputs.num_steps || '100' }}
+  MODEL_ID: ${{ github.event.inputs.model_id || 'google/gemma-3-1b-it' }}
+  LEARNING_RATE: ${{ github.event.inputs.learning_rate || '3e-6' }}
+  BATCH_SIZE: ${{ github.event.inputs.batch_size || '1' }}
+  RUN_NAME: ${{ github.event.inputs.run_name || '' }}
+  USE_LORA: ${{ github.event.inputs.use_lora || 'true' }}
+  IMAGE_TAG: ${{ github.event.inputs.image_tag || 'latest' }}
+  DOCKER_IMAGE: us-central1-docker.pkg.dev/kaggle-euge/tunix-training/grpo-trainer
+  TPU_ZONES: "us-central1-a us-east1-d us-east5-b us-south1-a europe-west4-b"
+
+jobs:
+  tpu-training:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
+
+      - name: Create TPU VM
+        id: create-tpu
+        run: |
+          echo "Creating TPU VM: $TPU_NAME (type: $TPU_TYPE)"
+          echo "Will try zones: $TPU_ZONES"
+
+          for zone in $TPU_ZONES; do
+            echo ""
+            echo "Attempting zone: $zone"
+            if gcloud compute tpus tpu-vm create $TPU_NAME \
+              --project=$GCP_PROJECT \
+              --zone=$zone \
+              --accelerator-type=$TPU_TYPE \
+              --version=v2-alpha-tpuv5-lite \
+              --preemptible 2>&1; then
+              echo "TPU VM created successfully in $zone"
+              echo "tpu_zone=$zone" >> $GITHUB_OUTPUT
+              echo "tpu_created=true" >> $GITHUB_OUTPUT
+              exit 0
+            else
+              echo "Failed to create TPU in $zone, trying next zone..."
+            fi
+          done
+
+          echo "ERROR: Failed to create TPU VM in any zone"
+          exit 1
+
+      - name: Wait for TPU VM to be ready
+        env:
+          TPU_ZONE: ${{ steps.create-tpu.outputs.tpu_zone }}
+        run: |
+          echo "Waiting for TPU VM to be ready in $TPU_ZONE..."
+          sleep 30
+
+          for i in {1..10}; do
+            if gcloud compute tpus tpu-vm ssh $TPU_NAME \
+              --project=$GCP_PROJECT \
+              --zone=$TPU_ZONE \
+              --command="echo 'TPU VM is ready'" 2>/dev/null; then
+              echo "TPU VM is ready!"
+              break
+            fi
+            echo "Attempt $i: TPU VM not ready yet, waiting..."
+            sleep 15
+          done
+
+      - name: Setup Docker on TPU VM
+        env:
+          TPU_ZONE: ${{ steps.create-tpu.outputs.tpu_zone }}
+        run: |
+          gcloud compute tpus tpu-vm ssh $TPU_NAME \
+            --project=$GCP_PROJECT \
+            --zone=$TPU_ZONE \
+            --command="
+              # Install Docker if not present
+              if ! command -v docker &> /dev/null; then
+                sudo apt-get update -qq
+                sudo apt-get install -y -qq docker.io
+                sudo usermod -aG docker \$USER
+              fi
+
+              # Configure Docker for Artifact Registry
+              gcloud auth configure-docker ${GCP_REGION}-docker.pkg.dev --quiet
+            "
+
+      - name: Pull Docker image
+        env:
+          TPU_ZONE: ${{ steps.create-tpu.outputs.tpu_zone }}
+        run: |
+          gcloud compute tpus tpu-vm ssh $TPU_NAME \
+            --project=$GCP_PROJECT \
+            --zone=$TPU_ZONE \
+            --command="
+              echo 'Pulling Docker image: ${DOCKER_IMAGE}:${IMAGE_TAG}'
+              sudo docker pull ${DOCKER_IMAGE}:${IMAGE_TAG}
+            "
+
+      - name: Run GRPO Training
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
+          TPU_ZONE: ${{ steps.create-tpu.outputs.tpu_zone }}
+        run: |
+          # Build arguments
+          RUN_NAME_ARG=""
+          if [ -n "$RUN_NAME" ]; then
+            RUN_NAME_ARG="--run-name $RUN_NAME"
+          fi
+
+          LORA_ARG=""
+          if [ "$USE_LORA" = "true" ]; then
+            LORA_ARG="--use-lora"
+          fi
+
+          gcloud compute tpus tpu-vm ssh $TPU_NAME \
+            --project=$GCP_PROJECT \
+            --zone=$TPU_ZONE \
+            --command="
+              sudo docker run --rm --privileged \
+                -e HF_TOKEN='${HF_TOKEN}' \
+                -e WANDB_API_KEY='${WANDB_API_KEY}' \
+                ${DOCKER_IMAGE}:${IMAGE_TAG} \
+                uv run python scripts/train_grpo.py \
+                  --num-steps $NUM_STEPS \
+                  --model-id $MODEL_ID \
+                  --learning-rate $LEARNING_RATE \
+                  --batch-size $BATCH_SIZE \
+                  --wandb-project tunix-grpo-ci \
+                  $LORA_ARG $RUN_NAME_ARG
+            "
+
+      - name: Cleanup TPU VM
+        if: always()
+        env:
+          TPU_ZONE: ${{ steps.create-tpu.outputs.tpu_zone }}
+        run: |
+          echo "Cleaning up TPU VM: $TPU_NAME in $TPU_ZONE"
+          gcloud compute tpus tpu-vm delete $TPU_NAME \
+            --project=$GCP_PROJECT \
+            --zone=$TPU_ZONE \
+            --quiet || echo "TPU VM cleanup failed or VM doesn't exist"
