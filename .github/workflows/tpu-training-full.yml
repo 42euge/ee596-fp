@@ -37,6 +37,10 @@ on:
         default: true
         type: boolean
 
+concurrency:
+  group: tpu-training
+  cancel-in-progress: false  # Queue instead of cancel
+
 env:
   TPU_NAME: training-${{ github.run_id }}
   GCP_PROJECT: kaggle-euge
