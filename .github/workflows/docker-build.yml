@@ -1,0 +1,90 @@
+name: Build Docker Image
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'Dockerfile'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - 'tunix/**'
+      - 'TunRex/**'
+      - 'scripts/**'
+      - 'src/**'
+
+env:
+  GCP_PROJECT: kaggle-euge
+  REGION: us-central1
+  REPOSITORY: tunix-training
+  IMAGE_NAME: grpo-trainer
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
+
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Create Artifact Registry repository (if not exists)
+        run: |
+          gcloud artifacts repositories create ${{ env.REPOSITORY }} \
+            --repository-format=docker \
+            --location=${{ env.REGION }} \
+            --description="TunRex GRPO training images" \
+            2>/dev/null || echo "Repository already exists"
+
+      - name: Build and push Docker image
+        run: |
+          IMAGE_TAG="${{ env.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}"
+
+          # Build with commit SHA and latest tags
+          docker build \
+            -t ${IMAGE_TAG}:${{ github.sha }} \
+            -t ${IMAGE_TAG}:latest \
+            .
+
+          # Push both tags
+          docker push ${IMAGE_TAG}:${{ github.sha }}
+          docker push ${IMAGE_TAG}:latest
+
+          echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
+
+      - name: Output image info
+        run: |
+          echo "=============================================="
+          echo "Docker image pushed successfully!"
+          echo "=============================================="
+          echo ""
+          echo "Image: ${{ env.IMAGE_TAG }}:latest"
+          echo "SHA:   ${{ env.IMAGE_TAG }}:${{ github.sha }}"
+          echo ""
+          echo "To pull:"
+          echo "  docker pull ${{ env.IMAGE_TAG }}:latest"
+          echo ""
+          echo "=============================================="
+
+          # Add to summary
+          echo "## Docker Image Built" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Tag | Image |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| latest | \`${{ env.IMAGE_TAG }}:latest\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| sha | \`${{ env.IMAGE_TAG }}:${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY

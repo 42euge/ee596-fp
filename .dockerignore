@@ -1,0 +1,14 @@
+.git
+.github
+.venv
+*.pyc
+__pycache__
+.pytest_cache
+*.egg-info
+.mypy_cache
+.ruff_cache
+wandb
+data
+checkpoints
+*.tar.gz
+.DS_Store
