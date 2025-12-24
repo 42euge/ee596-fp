@@ -16,6 +16,7 @@ sys.modules["torch.cuda"] = MagicMock()
 sys.modules["torch.backends"] = MagicMock()
 sys.modules["torch.backends.mps"] = MagicMock()
 sys.modules["transformers"] = MagicMock()
+sys.modules["peft"] = MagicMock()
 
 from src.utils import load_gsm8k_dataset, load_openrubrics_dataset
 

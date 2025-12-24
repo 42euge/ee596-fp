@@ -13,6 +13,7 @@ sys.modules["torch.cuda"] = MagicMock()
 sys.modules["torch.backends"] = MagicMock()
 sys.modules["torch.backends.mps"] = MagicMock()
 sys.modules["transformers"] = MagicMock()
+sys.modules["peft"] = MagicMock()
 
 from src.utils import (
     extract_reasoning_and_answer,

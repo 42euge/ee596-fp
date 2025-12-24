@@ -40,6 +40,7 @@ sys.modules["torch.cuda"] = mock_torch.cuda
 sys.modules["torch.backends"] = mock_torch.backends
 sys.modules["torch.backends.mps"] = mock_torch.backends.mps
 sys.modules["transformers"] = MagicMock()
+sys.modules["peft"] = MagicMock()
 
 # Now we can import - use the mock torch for tensor creation in tests
 import torch
