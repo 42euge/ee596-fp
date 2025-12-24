@@ -1,0 +1,84 @@
+name: Training Rubrics
+description: Rubrics for GRPO training evaluation
+rubrics:
+- name: math_reasoning
+  description: Evaluates mathematical problem-solving quality
+  criteria:
+  - name: format_compliance
+    description: Uses required <reasoning> and <answer> tags correctly
+    keywords:
+    - <reasoning>
+    - </reasoning>
+    - <answer>
+    - </answer>
+  - name: step_by_step
+    description: Shows clear step-by-step reasoning process
+    weight: 2.0
+    keywords:
+    - first
+    - then
+    - next
+    - step
+    - calculate
+    - therefore
+  - name: mathematical_accuracy
+    description: Performs calculations correctly and arrives at right answer
+    weight: 2.5
+    keywords:
+    - equals
+    - result
+    - total
+    - sum
+    - product
+  - name: clarity
+    description: Explanation is clear and easy to follow
+    weight: 1.5
+    keywords:
+    - because
+    - since
+    - means
+    - shows
+  id: 88e9e165
+  question_types:
+  - math
+  - arithmetic
+  - algebra
+  - word_problem
+  reference_response: '<reasoning>
+
+    Let me solve this step by step.
+
+    First, I identify that we need to calculate the total.
+
+    The calculation is: 5 + 10 = 15
+
+    Therefore, the answer is 15.
+
+    </reasoning>
+
+    <answer>15</answer>'
+  target_score: 18.0
+  metadata:
+    author: training_team
+    version: '1.0'
+- name: format_check
+  description: Checks if response uses correct XML tags
+  criteria:
+  - name: reasoning_tags
+    description: Contains <reasoning> tags with content
+    keywords:
+    - <reasoning>
+    - </reasoning>
+  - name: answer_tags
+    description: Contains <answer> tags with final answer
+    keywords:
+    - <answer>
+    - </answer>
+  id: 501f2be6
+  question_types:
+  - math
+  - reasoning
+  - general
+metadata:
+  version: '1.0'
+  created_by: example_script
