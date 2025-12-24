@@ -179,12 +179,12 @@ def test_scoring():
     return True
 
 
-def test_testing_utils():
-    """Test the testing utilities."""
+def test_evaluation_utils():
+    """Test the evaluation utilities."""
     from src.rubrics import (
         RubricBuilder,
         RubricSet,
-        test_rubric_with_dataset,
+        evaluate_rubric_with_dataset,
         quick_test_rubric,
         RubricTestConfig,
     )
@@ -208,16 +208,16 @@ def test_testing_utils():
     assert result["scores"][0] > result["scores"][1]
     print("  quick_test_rubric: OK")
 
-    # Test test_rubric_with_dataset
+    # Test evaluate_rubric_with_dataset
     dataset = [
         {"question": "What is 2+2?", "response": "<answer>4</answer>"},
         {"question": "What is 3+3?", "response": "Six"},
     ]
     config = RubricTestConfig(num_examples=10, verbose=True)
-    test_result = test_rubric_with_dataset(rubric, dataset, config)
+    test_result = evaluate_rubric_with_dataset(rubric, dataset, config)
     assert test_result.rubric_name == "test_rubric"
     assert len(test_result.scores) == 2
-    print("  test_rubric_with_dataset: OK")
+    print("  evaluate_rubric_with_dataset: OK")
 
     return True
 
@@ -241,8 +241,8 @@ def main():
     print("\n5. Testing scoring functions...")
     test_scoring()
 
-    print("\n6. Testing testing utilities...")
-    test_testing_utils()
+    print("\n6. Testing evaluation utilities...")
+    test_evaluation_utils()
 
     print("\n=== All tests passed! ===\n")
 

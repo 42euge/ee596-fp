@@ -6,6 +6,9 @@ between the rubrics module and the existing scoring infrastructure.
 
 import pytest
 
+# Skip all tests in this module if torch is not available
+torch_available = pytest.importorskip("torch", reason="torch required for scoring integration tests")
+
 from src.rubrics.models import Criterion, Rubric, RubricSet
 from src.rubrics.modifiers import RubricBuilder
 from src.rubrics.scoring import (
@@ -15,10 +18,10 @@ from src.rubrics.scoring import (
     create_multi_rubric_scorer,
     rubric_reward_adapter,
 )
-from src.rubrics.testing import (
+from src.rubrics.evaluation import (
     RubricTestConfig,
     RubricTestResult,
-    test_rubric_with_dataset,
+    evaluate_rubric_with_dataset,
     quick_test_rubric,
     create_grpo_reward_function,
     compare_rubrics,
@@ -306,7 +309,7 @@ class TestQuickTestRubric:
 
 
 class TestTestRubricWithDataset:
-    """Tests for test_rubric_with_dataset function."""
+    """Tests for evaluate_rubric_with_dataset function."""
 
     @pytest.fixture
     def dataset(self):
@@ -328,14 +331,14 @@ class TestTestRubricWithDataset:
 
     def test_returns_result_object(self, test_rubric, dataset):
         """Test that function returns RubricTestResult."""
-        result = test_rubric_with_dataset(test_rubric, dataset)
+        result = evaluate_rubric_with_dataset(test_rubric, dataset)
 
         assert isinstance(result, RubricTestResult)
         assert result.rubric_name == "dataset_test"
 
     def test_result_has_statistics(self, test_rubric, dataset):
         """Test that result has statistical fields."""
-        result = test_rubric_with_dataset(test_rubric, dataset)
+        result = evaluate_rubric_with_dataset(test_rubric, dataset)
 
         assert hasattr(result, "mean_score")
         assert hasattr(result, "std_score")
@@ -346,7 +349,7 @@ class TestTestRubricWithDataset:
 
     def test_result_summary(self, test_rubric, dataset):
         """Test result summary method."""
-        result = test_rubric_with_dataset(test_rubric, dataset)
+        result = evaluate_rubric_with_dataset(test_rubric, dataset)
         summary = result.summary()
 
         assert "dataset_test" in summary
@@ -355,14 +358,14 @@ class TestTestRubricWithDataset:
     def test_config_limits_examples(self, test_rubric, dataset):
         """Test that config limits number of examples."""
         config = RubricTestConfig(num_examples=2)
-        result = test_rubric_with_dataset(test_rubric, dataset, config)
+        result = evaluate_rubric_with_dataset(test_rubric, dataset, config)
 
         assert len(result.scores) == 2
 
     def test_verbose_includes_examples(self, test_rubric, dataset):
         """Test verbose mode includes examples."""
         config = RubricTestConfig(verbose=True, num_verbose_examples=2)
-        result = test_rubric_with_dataset(test_rubric, dataset, config)
+        result = evaluate_rubric_with_dataset(test_rubric, dataset, config)
 
         assert len(result.examples) <= 2
 

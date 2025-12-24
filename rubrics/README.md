@@ -229,7 +229,7 @@ combined = merge_rubrics(
 ### Testing Rubrics
 
 ```python
-from src.rubrics import test_rubric_with_dataset, quick_test_rubric
+from src.rubrics import evaluate_rubric_with_dataset, quick_test_rubric
 
 # Quick test with sample responses
 result = quick_test_rubric(
@@ -242,7 +242,7 @@ result = quick_test_rubric(
 print(f"Scores: {result['scores']}")
 
 # Test against a dataset
-results = test_rubric_with_dataset(rubricset, dataset)
+results = evaluate_rubric_with_dataset(rubricset, dataset)
 print(results.summary())
 ```
 

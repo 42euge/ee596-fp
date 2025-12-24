@@ -65,12 +65,12 @@ class RubricTestResult:
         return self.summary()
 
 
-def test_rubric_with_dataset(
+def evaluate_rubric_with_dataset(
     rubric: Rubric | RubricSet,
     dataset: List[dict],
     config: RubricTestConfig | None = None,
 ) -> RubricTestResult:
-    """Test a rubric against a dataset without model generation.
+    """Evaluate a rubric against a dataset without model generation.
 
     Uses existing responses in the dataset to compute scores.
     Useful for offline evaluation of rubric quality.
@@ -255,7 +255,7 @@ def compare_rubrics(
 
     results = []
     for rubric in rubric_list:
-        result = test_rubric_with_dataset(rubric, dataset, config)
+        result = evaluate_rubric_with_dataset(rubric, dataset, config)
         results.append(result)
 
     return results

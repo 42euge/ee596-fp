@@ -67,10 +67,10 @@ from .scoring import (
     rubric_reward_adapter,
 )
 
-from .testing import (
+from .evaluation import (
     RubricTestConfig,
     RubricTestResult,
-    test_rubric_with_dataset,
+    evaluate_rubric_with_dataset,
     create_grpo_reward_function,
     quick_test_rubric,
     compare_rubrics,
@@ -105,10 +105,10 @@ __all__ = [
     "create_weighted_rubric_scorer",
     "create_multi_rubric_scorer",
     "rubric_reward_adapter",
-    # Testing
+    # Evaluation
     "RubricTestConfig",
     "RubricTestResult",
-    "test_rubric_with_dataset",
+    "evaluate_rubric_with_dataset",
     "create_grpo_reward_function",
     "quick_test_rubric",
     "compare_rubrics",
