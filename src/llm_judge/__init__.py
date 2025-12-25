@@ -51,7 +51,7 @@ from .config import (
 )
 
 # Core classes
-from .rubric_generator import RubricGenerator, Rubric
+from .rubric_generator import RubricGenerator, GeneratedRubric
 from .response_scorer import ResponseScorer, ScoreResult
 
 # Backends
@@ -81,7 +81,7 @@ __all__ = [
     "JudgeMode",
     # Core classes
     "RubricGenerator",
-    "Rubric",
+    "GeneratedRubric",
     "ResponseScorer",
     "ScoreResult",
     # Backends

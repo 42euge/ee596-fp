@@ -7,7 +7,7 @@ Compatible with the signature used in TunRex/src/tunrex/datasets/rewards.py.
 from typing import List, Optional, Callable
 
 from .config import RubricGeneratorConfig, ResponseScorerConfig
-from .rubric_generator import RubricGenerator, Rubric
+from .rubric_generator import RubricGenerator, GeneratedRubric
 from .response_scorer import ResponseScorer
 
 

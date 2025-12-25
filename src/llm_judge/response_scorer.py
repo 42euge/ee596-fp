@@ -11,7 +11,7 @@ from .config import ResponseScorerConfig, JudgeMode, GenerationConfig
 from .backends import get_backend, LLMBackend
 from .prompts import get_scoring_prompt, get_reference_scoring_prompt
 from .parsing import parse_score
-from .rubric_generator import Rubric
+from .rubric_generator import GeneratedRubric
 
 
 @dataclass
@@ -85,7 +85,7 @@ class ResponseScorer:
         self,
         question: str,
         response: str,
-        rubric: Optional[Rubric] = None,
+        rubric: Optional[GeneratedRubric] = None,
         rubric_text: Optional[str] = None,
         reference_answer: Optional[str] = None,
     ) -> ScoreResult:
@@ -194,7 +194,7 @@ class ResponseScorer:
         self,
         questions: List[str],
         responses: List[str],
-        rubrics: Optional[List[Rubric]] = None,
+        rubrics: Optional[List[GeneratedRubric]] = None,
         rubric_texts: Optional[List[str]] = None,
         reference_answers: Optional[List[str]] = None,
         **kwargs,
@@ -204,7 +204,7 @@ class ResponseScorer:
         Args:
             questions: List of questions
             responses: List of responses to score
-            rubrics: Optional list of Rubric objects
+            rubrics: Optional list of GeneratedRubric objects
             rubric_texts: Optional list of rubric texts
             reference_answers: Optional list of reference answers
             **kwargs: Additional arguments passed to score()

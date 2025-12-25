@@ -11,7 +11,7 @@ import json
 from typing import Dict, Any, Optional, Tuple, List, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .rubric_generator import Rubric
+    from .rubric_generator import GeneratedRubric
 
 
 def parse_rubric(
@@ -19,8 +19,8 @@ def parse_rubric(
     question_hash: str,
     question_type: str,
     score_range: Tuple[int, int] = (0, 10),
-) -> "Rubric":
-    """Parse LLM output into a structured Rubric.
+) -> "GeneratedRubric":
+    """Parse LLM output into a structured GeneratedRubric.
 
     Handles multiple formats:
     - JSON blocks (```json ... ```)
@@ -35,16 +35,16 @@ def parse_rubric(
         score_range: Valid score range tuple
 
     Returns:
-        Parsed Rubric object
+        Parsed GeneratedRubric object
     """
-    from .rubric_generator import Rubric
+    from .rubric_generator import GeneratedRubric
 
     # Try JSON in code block first
     json_match = re.search(r"```json\s*(.*?)\s*```", text, re.DOTALL)
     if json_match:
         try:
             data = json.loads(json_match.group(1))
-            return Rubric(
+            return GeneratedRubric(
                 question_hash=question_hash,
                 question_type=question_type,
                 criteria=data.get("criteria", []),
@@ -62,7 +62,7 @@ def parse_rubric(
         if json_start >= 0 and json_end > json_start:
             json_str = text[json_start:json_end]
             data = json.loads(json_str)
-            return Rubric(
+            return GeneratedRubric(
                 question_hash=question_hash,
                 question_type=question_type,
                 criteria=data.get("criteria", []),
@@ -74,7 +74,7 @@ def parse_rubric(
 
     # Fallback: parse as plain text
     criteria = _parse_plain_text_rubric(text, score_range)
-    return Rubric(
+    return GeneratedRubric(
         question_hash=question_hash,
         question_type=question_type,
         criteria=criteria,

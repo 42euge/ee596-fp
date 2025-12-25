@@ -10,7 +10,7 @@ from typing import Optional, TYPE_CHECKING
 from datetime import datetime
 
 if TYPE_CHECKING:
-    from .rubric_generator import Rubric
+    from .rubric_generator import GeneratedRubric
 
 
 class RubricCache:
@@ -39,16 +39,16 @@ class RubricCache:
         """
         return self.cache_dir / f"{key}.json"
 
-    def get(self, key: str) -> Optional["Rubric"]:
+    def get(self, key: str) -> Optional["GeneratedRubric"]:
         """Retrieve a rubric from cache.
 
         Args:
             key: Cache key (question hash)
 
         Returns:
-            Rubric if found, None otherwise
+            GeneratedRubric if found, None otherwise
         """
-        from .rubric_generator import Rubric
+        from .rubric_generator import GeneratedRubric
 
         path = self._get_cache_path(key)
         if not path.exists():
@@ -57,20 +57,20 @@ class RubricCache:
         try:
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            # Remove cache metadata before creating Rubric
+            # Remove cache metadata before creating GeneratedRubric
             data.pop("_cached_at", None)
-            return Rubric.from_dict(data)
+            return GeneratedRubric.from_dict(data)
         except (json.JSONDecodeError, KeyError, TypeError) as e:
             # Invalid cache entry, remove it
             path.unlink(missing_ok=True)
             return None
 
-    def set(self, key: str, rubric: "Rubric") -> None:
+    def set(self, key: str, rubric: "GeneratedRubric") -> None:
         """Store a rubric in cache.
 
         Args:
             key: Cache key (question hash)
-            rubric: Rubric to cache
+            rubric: GeneratedRubric to cache
         """
         path = self._get_cache_path(key)
         data = rubric.to_dict()
