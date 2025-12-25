@@ -1,0 +1,281 @@
+name: Build Layered Docker Images
+
+on:
+  workflow_dispatch:
+    inputs:
+      models:
+        description: 'Models to include'
+        default: 'gemma-3-1b-it'
+        type: choice
+        options:
+          - gemma-3-1b-it
+          - gemma-3-270m
+          - both
+      dataset_source:
+        description: 'Dataset source'
+        default: 'tfds'
+        type: choice
+        options:
+          - tfds
+          - huggingface
+          - kaggle
+      force_rebuild:
+        description: 'Force rebuild all layers'
+        default: false
+        type: boolean
+
+  push:
+    branches: [main]
+    paths:
+      # Layer 1 triggers (dependencies)
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - 'tunix/pyproject.toml'
+      - 'TunRex/pyproject.toml'
+      - 'docker/base/**'
+      # Layer 2 triggers (data/models)
+      - 'scripts/model_utils.py'
+      - 'scripts/training_config.py'
+      - 'TunRex/src/tunrex/datasets/loaders.py'
+      - 'docker/data/**'
+      # Layer 3 triggers (training)
+      - 'scripts/**'
+      - 'src/**'
+      - 'docker/training/**'
+
+env:
+  GCP_PROJECT: kaggle-euge
+  REGION: us-central1
+  REPOSITORY: tunix-training
+  BASE_IMAGE: grpo-base
+  DATA_IMAGE: grpo-data
+  TRAINING_IMAGE: grpo-trainer
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      rebuild_base: ${{ steps.changes.outputs.base }}
+      rebuild_data: ${{ steps.changes.outputs.data }}
+      rebuild_training: ${{ steps.changes.outputs.training }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect changed files
+        id: changes
+        run: |
+          # Get changed files
+          CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || echo "")
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+
+          # Force rebuild all if requested
+          if [ "${{ inputs.force_rebuild }}" = "true" ]; then
+            echo "Force rebuild requested"
+            echo "base=true" >> $GITHUB_OUTPUT
+            echo "data=true" >> $GITHUB_OUTPUT
+            echo "training=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Check Layer 1 (base) triggers
+          if echo "$CHANGED_FILES" | grep -qE "^(pyproject\.toml|uv\.lock|tunix/pyproject\.toml|TunRex/pyproject\.toml|docker/base/)"; then
+            echo "Base layer changes detected"
+            echo "base=true" >> $GITHUB_OUTPUT
+          else
+            echo "base=false" >> $GITHUB_OUTPUT
+          fi
+
+          # Check Layer 2 (data) triggers
+          if echo "$CHANGED_FILES" | grep -qE "^(scripts/model_utils\.py|scripts/training_config\.py|TunRex/src/tunrex/datasets/loaders\.py|docker/data/)"; then
+            echo "Data layer changes detected"
+            echo "data=true" >> $GITHUB_OUTPUT
+          else
+            echo "data=false" >> $GITHUB_OUTPUT
+          fi
+
+          # Check Layer 3 (training) triggers
+          if echo "$CHANGED_FILES" | grep -qE "^(scripts/|src/|docker/training/)"; then
+            echo "Training layer changes detected"
+            echo "training=true" >> $GITHUB_OUTPUT
+          else
+            echo "training=false" >> $GITHUB_OUTPUT
+          fi
+
+  build-base:
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.rebuild_base == 'true'
+    outputs:
+      image_tag: ${{ steps.build.outputs.image_tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
+
+      - name: Configure Docker
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Build and push base image
+        id: build
+        run: |
+          IMAGE_TAG="${{ env.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.REPOSITORY }}/${{ env.BASE_IMAGE }}"
+
+          echo "Building base image..."
+          docker build \
+            -f docker/base/Dockerfile \
+            -t ${IMAGE_TAG}:${{ github.sha }} \
+            -t ${IMAGE_TAG}:latest \
+            .
+
+          echo "Pushing base image..."
+          docker push ${IMAGE_TAG}:${{ github.sha }}
+          docker push ${IMAGE_TAG}:latest
+
+          echo "image_tag=${IMAGE_TAG}:${{ github.sha }}" >> $GITHUB_OUTPUT
+
+  build-data:
+    runs-on: ubuntu-latest
+    needs: [detect-changes, build-base]
+    if: |
+      always() &&
+      (needs.detect-changes.outputs.rebuild_data == 'true' ||
+       needs.detect-changes.outputs.rebuild_base == 'true')
+    outputs:
+      image_tag: ${{ steps.build.outputs.image_tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
+
+      - name: Configure Docker
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Determine base image tag
+        id: base_tag
+        run: |
+          if [ "${{ needs.build-base.outputs.image_tag }}" != "" ]; then
+            echo "tag=${{ needs.build-base.outputs.image_tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ env.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.REPOSITORY }}/${{ env.BASE_IMAGE }}:latest" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build and push data image
+        id: build
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          IMAGE_TAG="${{ env.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.REPOSITORY }}/${{ env.DATA_IMAGE }}"
+          MODELS="${{ inputs.models || 'gemma-3-1b-it' }}"
+          DATASET_SOURCE="${{ inputs.dataset_source || 'tfds' }}"
+
+          echo "Building data image..."
+          echo "  Base: ${{ steps.base_tag.outputs.tag }}"
+          echo "  Models: ${MODELS}"
+          echo "  Dataset: ${DATASET_SOURCE}"
+
+          docker build \
+            -f docker/data/Dockerfile \
+            --build-arg BASE_IMAGE=${{ steps.base_tag.outputs.tag }} \
+            --build-arg MODELS=${MODELS} \
+            --build-arg DATASET_SOURCE=${DATASET_SOURCE} \
+            --build-arg HF_TOKEN=${HF_TOKEN} \
+            -t ${IMAGE_TAG}:${{ github.sha }} \
+            -t ${IMAGE_TAG}:latest \
+            -t ${IMAGE_TAG}:${MODELS}-${DATASET_SOURCE} \
+            .
+
+          echo "Pushing data image..."
+          docker push ${IMAGE_TAG}:${{ github.sha }}
+          docker push ${IMAGE_TAG}:latest
+          docker push ${IMAGE_TAG}:${MODELS}-${DATASET_SOURCE}
+
+          echo "image_tag=${IMAGE_TAG}:${{ github.sha }}" >> $GITHUB_OUTPUT
+
+  build-training:
+    runs-on: ubuntu-latest
+    needs: [detect-changes, build-data]
+    if: |
+      always() &&
+      (needs.detect-changes.outputs.rebuild_training == 'true' ||
+       needs.detect-changes.outputs.rebuild_data == 'true' ||
+       needs.detect-changes.outputs.rebuild_base == 'true')
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
+
+      - name: Configure Docker
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Determine data image tag
+        id: data_tag
+        run: |
+          if [ "${{ needs.build-data.outputs.image_tag }}" != "" ]; then
+            echo "tag=${{ needs.build-data.outputs.image_tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ env.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.REPOSITORY }}/${{ env.DATA_IMAGE }}:latest" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build and push training image
+        run: |
+          IMAGE_TAG="${{ env.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.REPOSITORY }}/${{ env.TRAINING_IMAGE }}"
+
+          echo "Building training image..."
+          echo "  Data: ${{ steps.data_tag.outputs.tag }}"
+
+          docker build \
+            -f docker/training/Dockerfile \
+            --build-arg DATA_IMAGE=${{ steps.data_tag.outputs.tag }} \
+            -t ${IMAGE_TAG}:${{ github.sha }} \
+            -t ${IMAGE_TAG}:latest \
+            .
+
+          echo "Pushing training image..."
+          docker push ${IMAGE_TAG}:${{ github.sha }}
+          docker push ${IMAGE_TAG}:latest
+
+      - name: Output summary
+        run: |
+          echo "## Docker Images Built" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Layer | Image | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Base | \`${{ env.BASE_IMAGE }}\` | ${{ needs.detect-changes.outputs.rebuild_base == 'true' && 'Rebuilt' || 'Cached' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Data | \`${{ env.DATA_IMAGE }}\` | ${{ needs.detect-changes.outputs.rebuild_data == 'true' && 'Rebuilt' || 'Cached' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Training | \`${{ env.TRAINING_IMAGE }}:${{ github.sha }}\` | Rebuilt |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Run Training" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "docker run --rm --privileged \\" >> $GITHUB_STEP_SUMMARY
+          echo "  -e HF_TOKEN=\$HF_TOKEN \\" >> $GITHUB_STEP_SUMMARY
+          echo "  -e WANDB_API_KEY=\$WANDB_API_KEY \\" >> $GITHUB_STEP_SUMMARY
+          echo "  -e NUM_STEPS=100 \\" >> $GITHUB_STEP_SUMMARY
+          echo "  ${{ env.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.REPOSITORY }}/${{ env.TRAINING_IMAGE }}:latest" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY

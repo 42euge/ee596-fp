@@ -152,17 +152,6 @@ jobs:
           WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
           TPU_ZONE: ${{ steps.create-tpu.outputs.tpu_zone }}
         run: |
-          # Build arguments
-          RUN_NAME_ARG=""
-          if [ -n "$RUN_NAME" ]; then
-            RUN_NAME_ARG="--run-name $RUN_NAME"
-          fi
-
-          LORA_ARG=""
-          if [ "$USE_LORA" = "true" ]; then
-            LORA_ARG="--use-lora"
-          fi
-
           gcloud compute tpus tpu-vm ssh $TPU_NAME \
             --project=$GCP_PROJECT \
             --zone=$TPU_ZONE \
@@ -170,14 +159,14 @@ jobs:
               sudo docker run --rm --privileged \
                 -e HF_TOKEN='${HF_TOKEN}' \
                 -e WANDB_API_KEY='${WANDB_API_KEY}' \
-                ${DOCKER_IMAGE}:${IMAGE_TAG} \
-                uv run python scripts/train_grpo.py \
-                  --num-steps $NUM_STEPS \
-                  --model-id $MODEL_ID \
-                  --learning-rate $LEARNING_RATE \
-                  --batch-size $BATCH_SIZE \
-                  --wandb-project tunix-grpo-ci \
-                  $LORA_ARG $RUN_NAME_ARG
+                -e NUM_STEPS='${NUM_STEPS}' \
+                -e MODEL_ID='${MODEL_ID}' \
+                -e LEARNING_RATE='${LEARNING_RATE}' \
+                -e BATCH_SIZE='${BATCH_SIZE}' \
+                -e USE_LORA='${USE_LORA}' \
+                -e RUN_NAME='${RUN_NAME}' \
+                -e WANDB_PROJECT='tunix-grpo-ci' \
+                ${DOCKER_IMAGE}:${IMAGE_TAG}
             "
 
       - name: Cleanup TPU VM
