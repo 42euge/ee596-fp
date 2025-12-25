@@ -1,8 +1,6 @@
 name: TPU Training CI
 
 on:
-  pull_request:
-    branches: [main]
   workflow_dispatch:
     inputs:
       num_steps:
