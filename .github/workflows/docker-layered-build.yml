@@ -111,6 +111,12 @@ jobs:
     outputs:
       image_tag: ${{ steps.build.outputs.image_tag }}
     steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          sudo apt-get clean
+          df -h
+
       - uses: actions/checkout@v4
         with:
           submodules: recursive
@@ -157,11 +163,18 @@ jobs:
     needs: [detect-changes, build-base]
     if: |
       always() &&
+      (needs.build-base.result == 'success' || needs.build-base.result == 'skipped') &&
       (needs.detect-changes.outputs.rebuild_data == 'true' ||
        needs.detect-changes.outputs.rebuild_base == 'true')
     outputs:
       image_tag: ${{ steps.build.outputs.image_tag }}
     steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          sudo apt-get clean
+          df -h
+
       - uses: actions/checkout@v4
         with:
           submodules: recursive
@@ -223,10 +236,17 @@ jobs:
     needs: [detect-changes, build-data]
     if: |
       always() &&
+      (needs.build-data.result == 'success' || needs.build-data.result == 'skipped') &&
       (needs.detect-changes.outputs.rebuild_training == 'true' ||
        needs.detect-changes.outputs.rebuild_data == 'true' ||
        needs.detect-changes.outputs.rebuild_base == 'true')
     steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          sudo apt-get clean
+          df -h
+
       - uses: actions/checkout@v4
         with:
           submodules: recursive
