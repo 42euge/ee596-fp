@@ -1,28 +1,57 @@
 [project]
 name = "tunix-hackathon-google"
 version = "0.1.0"
-description = "Add your description here"
-requires-python = ">=3.11"
+description = "GRPO training on TPU with Tunix"
+requires-python = ">=3.11,<3.13"
 dependencies = [
-    "torch>=2.0.0",
     "transformers>=4.40.0",
-    "peft>=0.10.0",
-    "accelerate>=0.27.0",
     "safetensors>=0.4.0",
     "datasets>=2.18.0",
     "pandas>=2.0.0",
     "tqdm>=4.66.0",
     "huggingface_hub>=0.21.0",
+    "jax[tpu]==0.8.1",
+    "flax>=0.11.1",
+    "optax>=0.2.0",
+    "grain-nightly",
+    "wandb>=0.16.0",
+    "tensorflow",
+    "tensorflow_datasets",
+    "google-tunix",
+    "tunrex",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
-quantization = ["bitsandbytes>=0.42.0"]
-tpu = [
-    "google-tunix",
-    "jax[tpu]>=0.4.0",
-    "flax>=0.12.0",
-    "optax>=0.2.0",
-    "grain>=0.2.0",
+test = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-mock>=3.12.0",
+]
+
+[tool.uv]
+environments = ["sys_platform == 'linux'"]
+
+[tool.uv.sources]
+google-tunix = { path = "tunix", editable = true }
+tunrex = { path = "TunRex", editable = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "TunRex/tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.coverage.run]
+source = ["src", "TunRex/src/tunrex"]
+omit = ["*/tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
 ]
 llm-judge = [
     "openai>=1.0.0",

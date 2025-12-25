@@ -1,8 +1,6 @@
 name: TPU Training CI
 
 on:
-  pull_request:
-    branches: [main]
   workflow_dispatch:
     inputs:
       num_steps:
@@ -19,12 +17,17 @@ on:
           - v5litepod-8
           - v5litepod-16
 
+concurrency:
+  group: tpu-training
+  cancel-in-progress: false  # Queue instead of cancel
+
 env:
   TPU_NAME: ci-training-${{ github.run_id }}
-  TPU_ZONE: us-central1-a
   GCP_PROJECT: kaggle-euge
   TPU_TYPE: ${{ github.event.inputs.tpu_type || 'v5litepod-4' }}
   NUM_STEPS: ${{ github.event.inputs.num_steps || '10' }}
+  # Zones to try in order (v5litepod available zones)
+  TPU_ZONES: "us-central1-a us-east1-d us-east5-b us-south1-a europe-west4-b"
 
 jobs:
   tpu-training:
@@ -34,6 +37,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
@@ -49,19 +54,34 @@ jobs:
         id: create-tpu
         run: |
           echo "Creating TPU VM: $TPU_NAME (type: $TPU_TYPE)"
+          echo "Will try zones: $TPU_ZONES"
 
-          gcloud compute tpus tpu-vm create $TPU_NAME \
-            --project=$GCP_PROJECT \
-            --zone=$TPU_ZONE \
-            --accelerator-type=$TPU_TYPE \
-            --version=v2-alpha-tpuv5-lite \
-            --preemptible
+          for zone in $TPU_ZONES; do
+            echo ""
+            echo "Attempting zone: $zone"
+            if gcloud compute tpus tpu-vm create $TPU_NAME \
+              --project=$GCP_PROJECT \
+              --zone=$zone \
+              --accelerator-type=$TPU_TYPE \
+              --version=v2-alpha-tpuv5-lite \
+              --preemptible 2>&1; then
+              echo "TPU VM created successfully in $zone"
+              echo "tpu_zone=$zone" >> $GITHUB_OUTPUT
+              echo "tpu_created=true" >> $GITHUB_OUTPUT
+              exit 0
+            else
+              echo "Failed to create TPU in $zone, trying next zone..."
+            fi
+          done
 
-          echo "tpu_created=true" >> $GITHUB_OUTPUT
+          echo "ERROR: Failed to create TPU VM in any zone"
+          exit 1
 
       - name: Wait for TPU VM to be ready
+        env:
+          TPU_ZONE: ${{ steps.create-tpu.outputs.tpu_zone }}
         run: |
-          echo "Waiting for TPU VM to be ready..."
+          echo "Waiting for TPU VM to be ready in $TPU_ZONE..."
           sleep 30
 
           # Wait for SSH to be available
@@ -78,6 +98,8 @@ jobs:
           done
 
       - name: Copy code to TPU VM
+        env:
+          TPU_ZONE: ${{ steps.create-tpu.outputs.tpu_zone }}
         run: |
           # Create a tarball of the repository
           tar -czf /tmp/repo.tar.gz -C $GITHUB_WORKSPACE .
@@ -94,6 +116,8 @@ jobs:
             --command="mkdir -p ~/training && tar -xzf ~/repo.tar.gz -C ~/training"
 
       - name: Setup TPU VM environment
+        env:
+          TPU_ZONE: ${{ steps.create-tpu.outputs.tpu_zone }}
         run: |
           gcloud compute tpus tpu-vm ssh $TPU_NAME \
             --project=$GCP_PROJECT \
@@ -103,6 +127,7 @@ jobs:
       - name: Configure HuggingFace auth
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          TPU_ZONE: ${{ steps.create-tpu.outputs.tpu_zone }}
         run: |
           # Write token directly to HuggingFace cache location
           echo "${HF_TOKEN}" > /tmp/hf_token.txt
@@ -118,16 +143,20 @@ jobs:
             --command="mkdir -p ~/.cache/huggingface && mv ~/hf_token.txt ~/.cache/huggingface/token"
 
       - name: Run training
+        env:
+          TPU_ZONE: ${{ steps.create-tpu.outputs.tpu_zone }}
         run: |
           gcloud compute tpus tpu-vm ssh $TPU_NAME \
             --project=$GCP_PROJECT \
             --zone=$TPU_ZONE \
-            --command="cd ~/training && source ~/venv/bin/activate && python scripts/train_small.py --num-steps $NUM_STEPS"
+            --command="cd ~/training && uv run python scripts/train_small.py --num-steps $NUM_STEPS"
 
       - name: Cleanup TPU VM
         if: always()
+        env:
+          TPU_ZONE: ${{ steps.create-tpu.outputs.tpu_zone }}
         run: |
-          echo "Cleaning up TPU VM: $TPU_NAME"
+          echo "Cleaning up TPU VM: $TPU_NAME in $TPU_ZONE"
           gcloud compute tpus tpu-vm delete $TPU_NAME \
             --project=$GCP_PROJECT \
             --zone=$TPU_ZONE \

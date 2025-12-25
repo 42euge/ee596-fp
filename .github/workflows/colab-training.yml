@@ -1,0 +1,68 @@
+name: Colab Training Setup
+
+on:
+  workflow_dispatch:
+    inputs:
+      notebook:
+        description: 'Notebook to use'
+        default: 'colab_train'
+        type: choice
+        options:
+          - colab_train
+          - grpo_gemma_tunrex_gdrive_save
+          - grpo_gemma_tunrex
+
+jobs:
+  prepare-colab:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate notebook exists
+        run: |
+          NOTEBOOK="${{ github.event.inputs.notebook }}"
+          NOTEBOOK_PATH="notebooks/${NOTEBOOK}.ipynb"
+
+          if [ ! -f "$NOTEBOOK_PATH" ]; then
+            echo "ERROR: Notebook not found: $NOTEBOOK_PATH"
+            exit 1
+          fi
+
+          echo "Notebook found: $NOTEBOOK_PATH"
+          echo "NOTEBOOK_PATH=$NOTEBOOK_PATH" >> $GITHUB_ENV
+
+      - name: Generate Colab URL
+        run: |
+          NOTEBOOK="${{ github.event.inputs.notebook }}"
+          REPO="${{ github.repository }}"
+          NOTEBOOK_PATH="notebooks/${NOTEBOOK}.ipynb"
+          COLAB_URL="https://colab.research.google.com/github/${REPO}/blob/main/${NOTEBOOK_PATH}"
+
+          echo ""
+          echo "=============================================="
+          echo "COLAB NOTEBOOK READY!"
+          echo "=============================================="
+          echo ""
+          echo "Open in Google Colab:"
+          echo "$COLAB_URL"
+          echo ""
+          echo "Instructions:"
+          echo "1. Click the link above to open in Colab"
+          echo "2. Connect to a TPU runtime (Runtime > Change runtime type > TPU)"
+          echo "3. Configure training parameters in the notebook"
+          echo "4. Run all cells (Runtime > Run all)"
+          echo ""
+          echo "=============================================="
+
+          # Create summary
+          echo "## Colab Notebook Ready" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)]($COLAB_URL)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Instructions" >> $GITHUB_STEP_SUMMARY
+          echo "1. Click the badge above to open in Colab" >> $GITHUB_STEP_SUMMARY
+          echo "2. Change runtime to TPU (Runtime > Change runtime type > TPU)" >> $GITHUB_STEP_SUMMARY
+          echo "3. Configure training parameters in the notebook" >> $GITHUB_STEP_SUMMARY
+          echo "4. Run all cells" >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,229 @@
+name: Kaggle Training
+
+on:
+  workflow_dispatch:
+    inputs:
+      num_steps:
+        description: 'Number of training steps'
+        default: '100'
+        type: string
+      accelerator:
+        description: 'Accelerator type'
+        default: 'tpu'
+        type: choice
+        options:
+          - tpu
+          - gpu
+          - none
+      run_name:
+        description: 'Run name for tracking'
+        default: ''
+        type: string
+      wait_for_completion:
+        description: 'Wait for kernel to complete'
+        default: true
+        type: boolean
+
+env:
+  KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+  KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+  KERNEL_SLUG: grpo-train-${{ github.run_number }}
+
+jobs:
+  kaggle-training:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Kaggle CLI
+        run: |
+          pip install kaggle
+          mkdir -p ~/.kaggle
+          echo '{"username":"${{ secrets.KAGGLE_USERNAME }}","key":"${{ secrets.KAGGLE_KEY }}"}' > ~/.kaggle/kaggle.json
+          chmod 600 ~/.kaggle/kaggle.json
+
+      - name: Verify Kaggle authentication
+        run: |
+          kaggle config view
+          echo "Kaggle CLI configured for user: $KAGGLE_USERNAME"
+
+      - name: Prepare kernel
+        env:
+          NUM_STEPS: ${{ github.event.inputs.num_steps }}
+          ACCELERATOR: ${{ github.event.inputs.accelerator }}
+          RUN_NAME: ${{ github.event.inputs.run_name }}
+          RUN_ID: ${{ github.run_id }}
+          WANDB_KEY: ${{ secrets.WANDB_API_KEY }}
+          HF_KEY: ${{ secrets.HF_TOKEN }}
+        run: |
+          python3 << 'PYTHON_SCRIPT'
+          import json
+          import os
+          import shutil
+
+          # Get environment variables
+          num_steps = os.environ.get('NUM_STEPS', '100')
+          accelerator = os.environ.get('ACCELERATOR', 'tpu')
+          run_name = os.environ.get('RUN_NAME') or f"run-{os.environ.get('RUN_ID', 'unknown')}"
+          kaggle_user = os.environ.get('KAGGLE_USERNAME', '')
+          kernel_slug = os.environ.get('KERNEL_SLUG', 'tunix-grpo-training')
+          wandb_key = os.environ.get('WANDB_KEY', '')
+          hf_key = os.environ.get('HF_KEY', '')
+
+          # Create kernel directory
+          os.makedirs('kaggle_kernel', exist_ok=True)
+
+          # Copy notebook
+          shutil.copy('notebooks/grpo_gemma_tunrex_gdrive_save.ipynb', 'kaggle_kernel/notebook.ipynb')
+
+          # Create metadata
+          enable_gpu = accelerator == 'gpu'
+          enable_tpu = accelerator == 'tpu'
+
+          metadata = {
+              "id": f"{kaggle_user}/{kernel_slug}",
+              "title": "tunix-grpo-training",
+              "code_file": "notebook.ipynb",
+              "language": "python",
+              "kernel_type": "notebook",
+              "is_private": True,
+              "enable_gpu": enable_gpu,
+              "enable_tpu": enable_tpu,
+              "enable_internet": True,
+              "dataset_sources": [],
+              "competition_sources": [],
+              "kernel_sources": []
+          }
+
+          with open('kaggle_kernel/kernel-metadata.json', 'w') as f:
+              json.dump(metadata, f, indent=2)
+
+          print(f"Created kernel metadata: {metadata}")
+
+          # Inject CI parameters into notebook
+          with open('kaggle_kernel/notebook.ipynb', 'r') as f:
+              nb = json.load(f)
+
+          ci_cell = {
+              "cell_type": "code",
+              "execution_count": None,
+              "metadata": {},
+              "outputs": [],
+              "source": [
+                  "# CI/CD Injected Parameters\n",
+                  "import os\n",
+                  f"os.environ['CI_NUM_STEPS'] = '{num_steps}'\n",
+                  f"os.environ['CI_RUN_NAME'] = '{run_name}'\n",
+                  f"os.environ['WANDB_API_KEY'] = '{wandb_key}'\n",
+                  f"os.environ['HF_TOKEN'] = '{hf_key}'\n",
+                  f"NUM_BATCHES = {num_steps}  # Override from CI\n",
+                  f"MAX_STEPS = {num_steps}  # Override from CI\n",
+                  f"VERSION = '{run_name}'  # Override from CI\n",
+                  f"print(f'CI Parameters: steps={num_steps}, run={run_name}')\n"
+              ]
+          }
+
+          # Insert after first markdown cell
+          insert_idx = 1
+          for i, cell in enumerate(nb['cells']):
+              if cell['cell_type'] == 'code':
+                  insert_idx = i
+                  break
+
+          nb['cells'].insert(insert_idx, ci_cell)
+
+          with open('kaggle_kernel/notebook.ipynb', 'w') as f:
+              json.dump(nb, f, indent=2)
+
+          print(f"Injected CI parameters: steps={num_steps}, run={run_name}")
+          PYTHON_SCRIPT
+
+      - name: Push kernel to Kaggle
+        id: push-kernel
+        run: |
+          cd kaggle_kernel
+          echo "=== Kernel metadata ==="
+          cat kernel-metadata.json
+          echo ""
+          echo "=== Files in kernel directory ==="
+          ls -la
+          echo ""
+          echo "=== Pushing to Kaggle ==="
+          OUTPUT=$(kaggle kernels push -p . 2>&1)
+          echo "$OUTPUT"
+
+          # Check for actual success (should contain URL or version info)
+          if echo "$OUTPUT" | grep -qi "error"; then
+            echo "ERROR: Kaggle push failed!"
+            exit 1
+          fi
+
+          echo "Kernel pushed successfully!"
+          echo "kernel_id=$KAGGLE_USERNAME/$KERNEL_SLUG" >> $GITHUB_OUTPUT
+          echo ""
+          echo "View at: https://www.kaggle.com/code/$KAGGLE_USERNAME/$KERNEL_SLUG"
+
+      - name: Wait for kernel completion
+        if: ${{ github.event.inputs.wait_for_completion == 'true' }}
+        run: |
+          KERNEL_ID="$KAGGLE_USERNAME/$KERNEL_SLUG"
+          echo "Monitoring kernel: $KERNEL_ID"
+
+          MAX_WAIT=21600
+          POLL_INTERVAL=60
+          ELAPSED=0
+
+          while [ $ELAPSED -lt $MAX_WAIT ]; do
+            STATUS=$(kaggle kernels status $KERNEL_ID 2>&1 | tail -1)
+            echo "[$ELAPSED s] Status: $STATUS"
+
+            if echo "$STATUS" | grep -q "complete"; then
+              echo "Kernel completed successfully!"
+              exit 0
+            elif echo "$STATUS" | grep -q "error"; then
+              echo "Kernel failed with error!"
+              kaggle kernels output $KERNEL_ID -p ./output || true
+              exit 1
+            elif echo "$STATUS" | grep -q "cancelAcknowledged"; then
+              echo "Kernel was cancelled!"
+              exit 1
+            fi
+
+            sleep $POLL_INTERVAL
+            ELAPSED=$((ELAPSED + POLL_INTERVAL))
+          done
+
+          echo "Timeout waiting for kernel completion"
+          exit 1
+
+      - name: Download kernel output
+        if: ${{ github.event.inputs.wait_for_completion == 'true' && success() }}
+        run: |
+          KERNEL_ID="$KAGGLE_USERNAME/$KERNEL_SLUG"
+          mkdir -p output
+          kaggle kernels output $KERNEL_ID -p ./output || echo "No output files"
+          echo "Output files:"
+          ls -la output/ || echo "No output directory"
+
+      - name: Upload artifacts
+        if: ${{ github.event.inputs.wait_for_completion == 'true' && success() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: kaggle-training-output
+          path: output/
+          if-no-files-found: ignore
+
+      - name: Print kernel URL
+        run: |
+          echo "=============================================="
+          echo "Kaggle Kernel URL:"
+          echo "https://www.kaggle.com/code/$KAGGLE_USERNAME/$KERNEL_SLUG"
+          echo "=============================================="
