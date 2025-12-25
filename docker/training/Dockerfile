@@ -11,8 +11,7 @@ WORKDIR /app
 COPY scripts/ ./scripts/
 COPY src/ ./src/
 
-# Copy rubrics if they exist
-COPY rubrics/ ./rubrics/ 2>/dev/null || true
+# Note: rubrics/ is optional - copy manually if needed for training
 
 # Default hyperparameters (can be overridden at runtime via -e)
 ENV NUM_STEPS=100
