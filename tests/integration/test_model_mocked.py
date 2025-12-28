@@ -16,6 +16,14 @@ class MockTensor:
         return self.data[idx] if isinstance(self.data, list) else self.data
 
 class MockTorch:
+    # Add dtype attributes that torch modules expect
+    float32 = "float32"
+    float16 = "float16"
+    bfloat16 = "bfloat16"
+    int32 = "int32"
+    int64 = "int64"
+    bool = "bool"
+
     @staticmethod
     def tensor(data):
         return MockTensor(data)
@@ -66,12 +74,16 @@ class TestGetDevice:
         result = get_device("cpu")
         assert result == "cpu"
 
-    @patch("torch.cuda.is_available")
-    def test_auto_selects_cuda(self, mock_cuda):
+    def test_auto_selects_cuda(self):
         """Test auto selects CUDA when available."""
-        mock_cuda.return_value = True
-        result = get_device("auto")
-        assert result == "cuda"
+        # Temporarily modify the mock to report CUDA available
+        original_is_available = MockTorch.cuda.is_available
+        MockTorch.cuda.is_available = staticmethod(lambda: True)
+        try:
+            result = get_device("auto")
+            assert result == "cuda"
+        finally:
+            MockTorch.cuda.is_available = original_is_available
 
     @pytest.mark.skip(reason="Mocked torch doesn't support patching nested classes")
     @patch("torch.cuda.is_available")
