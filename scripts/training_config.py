@@ -117,3 +117,17 @@ def create_grpo_config(args):
         beta=args.beta,
         epsilon=args.epsilon,
     )
+
+
+def create_rloo_config(args):
+    """Create RLOO algorithm configuration."""
+    from scripts.rloo_learner import RLOOConfig
+
+    return RLOOConfig(
+        num_generations=args.num_generations,
+        num_iterations=1,
+        beta=args.beta,
+        epsilon=args.epsilon,
+        kl_in_reward=args.kl_in_reward,
+        advantage_clip=args.advantage_clip,
+    )

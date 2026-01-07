@@ -11,7 +11,9 @@ from scripts.utils import (
     check_tunix_deps, create_mesh, init_wandb, finish_wandb,
 )
 from scripts.model_utils import download_model, load_models
-from scripts.training_config import create_cluster_config, create_grpo_config, load_datasets
+from scripts.training_config import (
+    create_cluster_config, create_grpo_config, create_rloo_config, load_datasets
+)
 from scripts.reward_utils import setup_rewards
 
 
@@ -55,14 +57,18 @@ def main():
 
         # Create configs
         cluster_config = create_cluster_config(args, mesh, eos_tokens)
-        grpo_config = create_grpo_config(args)
+
+        # Create algorithm config based on advantage estimator
+        if args.advantage_estimator == "rloo":
+            algo_config = create_rloo_config(args)
+        else:
+            algo_config = create_grpo_config(args)
 
         # Setup rewards
         reward_fns, reward_logger = setup_rewards(args, wandb_enabled=wandb_run is not None)
 
         # Create trainer
         from tunix.rl import rl_cluster as rl_cluster_lib
-        from tunix.rl.grpo.grpo_learner import GRPOLearner
 
         rl_cluster = rl_cluster_lib.RLCluster(
             actor=policy_model,
@@ -71,15 +77,26 @@ def main():
             cluster_config=cluster_config,
         )
 
-        trainer = GRPOLearner(
-            rl_cluster=rl_cluster,
-            reward_fns=reward_fns,
-            algo_config=grpo_config,
-        )
+        # Create learner based on advantage estimator
+        if args.advantage_estimator == "rloo":
+            from scripts.rloo_learner import RLOOLearner
+            trainer = RLOOLearner(
+                rl_cluster=rl_cluster,
+                reward_fns=reward_fns,
+                algo_config=algo_config,
+            )
+        else:
+            from tunix.rl.grpo.grpo_learner import GRPOLearner
+            trainer = GRPOLearner(
+                rl_cluster=rl_cluster,
+                reward_fns=reward_fns,
+                algo_config=algo_config,
+            )
 
         # Train
         print("\n" + "=" * 60)
-        print(f"Training: {args.num_steps} steps, lr={args.learning_rate}, LoRA={args.use_lora}")
+        algo_name = "RLOO" if args.advantage_estimator == "rloo" else "GRPO"
+        print(f"{algo_name} Training: {args.num_steps} steps, lr={args.learning_rate}, LoRA={args.use_lora}")
         print("=" * 60 + "\n")
 
         trainer.train(train_ds, val_ds)

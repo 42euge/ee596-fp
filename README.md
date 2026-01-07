@@ -190,9 +190,33 @@ Key hyperparameters in `src/config.py`:
 Training requires a TPU environment (Google Colab or Kaggle recommended). Use the training notebook at `demo/train_colab.ipynb` for the full training pipeline using Google's Tunix library.
 
 Key training components:
-- **GRPO**: Group Relative Policy Optimization for RL fine-tuning
+- **GRPO/RLOO**: Group Relative Policy Optimization or RLOO for RL fine-tuning
 - **Rubric-as-Reward**: Uses rubric overlap and reference similarity for reward signals
 - **LoRA**: Parameter-efficient fine-tuning with low-rank adapters
+
+### RLOO: Alternative Advantage Estimator
+
+**New!** We now support RLOO (REINFORCE Leave-One-Out) as an alternative to GRPO. RLOO is more robust to noisy rewards and better suited for subjective/continuous reward signals.
+
+**When to use RLOO:**
+- Training with rubric-based rewards (continuous scores)
+- Working on creative/reasoning tasks without ground truth
+- Experiencing reward hacking or instability with GRPO
+
+**Quick start:**
+```bash
+python scripts/train_grpo.py \
+  --advantage-estimator rloo \
+  --kl-in-reward \
+  --num-generations 4 \
+  --rubric-file data/rubrics/reasoning_quality.yaml
+```
+
+**📖 Full documentation:** See [docs/RLOO_GUIDE.md](docs/RLOO_GUIDE.md) for detailed usage, comparisons, and examples.
+
+**Examples:**
+- Basic RLOO training: `examples/train_with_rloo.sh`
+- GRPO vs RLOO comparison: `examples/compare_grpo_vs_rloo.sh`
 
 ### Creating and Using Checkpoints
 

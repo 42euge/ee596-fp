@@ -83,6 +83,9 @@ def init_wandb(args, num_devices: int, has_tpu: bool):
                 "has_tpu": has_tpu,
                 "rubric_file": args.rubric_file or None,
                 "rubric_weight": args.rubric_weight if args.rubric_file else None,
+                "advantage_estimator": args.advantage_estimator,
+                "kl_in_reward": args.kl_in_reward if args.advantage_estimator == "rloo" else None,
+                "advantage_clip": args.advantage_clip if args.advantage_estimator == "rloo" else None,
             }
         )
         print(f"  W&B initialized: {wandb.run.url}")
@@ -207,6 +210,15 @@ def parse_args() -> argparse.Namespace:
                         help="Path to rubric YAML file for rubric-based reward")
     parser.add_argument("--rubric-weight", type=float, default=1.0,
                         help="Weight for rubric reward function")
+
+    # RLOO parameters
+    parser.add_argument("--advantage-estimator", type=str, default="grpo",
+                        choices=["grpo", "rloo"],
+                        help="Advantage estimator: 'grpo' (default) or 'rloo'")
+    parser.add_argument("--kl-in-reward", action="store_true",
+                        help="For RLOO: fold KL directly into reward (R' = R - β*KL)")
+    parser.add_argument("--advantage-clip", type=float, default=None,
+                        help="For RLOO: clip advantages to prevent outliers")
 
     return parser.parse_args()
 
